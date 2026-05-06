@@ -49,6 +49,20 @@ bd close <id>         # Complete work
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
 
+## Agent skills
+
+### Issue tracker
+
+Primary tracker is GitHub Issues (`gh` CLI); local `bd` may also be used for local/offline workflows. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage state uses default labels: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Project uses single-context layout: one root `CONTEXT.md` and root `docs/adr/`. See `docs/agents/domain.md`.
+
 
 ## Build & Test
 
