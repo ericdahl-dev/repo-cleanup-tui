@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "repo_cleanup_tui",
+  "project_id": "e56b156e-a6d1-442b-a129-083ecd56ff64"
+}
