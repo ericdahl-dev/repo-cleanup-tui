@@ -20,3 +20,9 @@ node_modules
 .dolt/
 *.db
 .beads-credential-key
+
+# Local scan cache written under scanned roots
+.repo-cleanup-tui-scan-cache.json
+
+# Cursor IDE
+.cursor/
