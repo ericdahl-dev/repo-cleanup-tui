@@ -1,5 +1,7 @@
 # repo-cleanup-tui
 
+![repo-cleanup-tui app rendering](docs/repo-cleanup-tui-render.svg)
+
 TUI scanner for reclaimable Node disk usage in repo folders.
 
 ## Goal
@@ -77,4 +79,3 @@ In confirm mode:
 - explicit user-triggered actions only
 - safety gates before deletion
 - full scan + cache controls (`r` for bypass)
-
