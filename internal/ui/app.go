@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/cleanup"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scanner"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/view"
 )
@@ -49,6 +50,12 @@ type model struct {
 	showHelp        bool
 	selected        int
 	width           int
+	mode            uiMode
+	confirmInput    string
+	assessment      *cleanup.Assessment
+	assessmentBusy  bool
+	cleanupBusy     bool
+	auditLog        []string
 }
 
 type scanEvent struct {
@@ -148,10 +155,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tickMsg:
-		if m.loading {
+		if m.loading || m.cleanupBusy {
 			m.spinnerFrame++
 		}
 		return m, tickCmd()
+
+	case assessmentMsg:
+		m.assessmentBusy = false
+		if msg.err != nil {
+			m.appendAudit(fmt.Sprintf("assessment failed reason=%v", msg.err))
+			return m, nil
+		}
+		a := msg.assessment
+		m.assessment = &a
+		return m, nil
+
+	case cleanupDoneMsg:
+		cmd := m.handleCleanupDone(msg)
+		return m, cmd
 
 	case scanProgressMsg:
 		m.dirsScanned = msg.dirs
@@ -197,19 +218,45 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
-	if msg.String() == "ctrl+c" || msg.String() == "q" {
-		return true, nil
-	}
-	if msg.String() == "esc" {
+	key := msg.String()
+	if key == "ctrl+c" || key == "q" || key == "esc" {
 		if m.showHelp {
 			m.showHelp = false
+			return false, nil
+		}
+		if m.mode != modeBrowse {
+			m.mode = modeBrowse
+			m.confirmInput = ""
+			m.assessment = nil
+			m.assessmentBusy = false
 			return false, nil
 		}
 		return true, nil
 	}
 
+	if m.mode == modePreview {
+		if quit, cmd := m.handlePreviewKey(msg); quit || cmd != nil {
+			return quit, cmd
+		}
+		return false, nil
+	}
+	if m.mode == modeConfirm {
+		if quit, cmd := m.handleConfirmKey(msg); quit || cmd != nil {
+			return quit, cmd
+		}
+		return false, nil
+	}
+
 	filtered := m.filtered()
-	switch msg.String() {
+	switch key {
+	case "x":
+		if row, ok := m.activeRow(); ok {
+			m.mode = modePreview
+			m.confirmInput = ""
+			m.assessment = nil
+			m.assessmentBusy = true
+			return false, assessCmd(row)
+		}
 	case "r":
 		cmd = m.startRescan()
 	case "s":
@@ -340,12 +387,13 @@ func (m model) View() string {
 	if m.minInactiveDays > 0 {
 		inactiveLabel = fmt.Sprintf(">=%dd", m.minInactiveDays)
 	}
-	b.WriteString("Keys: q quit | ? help | r rescan | j/u move | s sort | f inactive | k safe | d dirty\n")
+	b.WriteString("Keys: q quit | ? help | r rescan | x cleanup | j/u move | s sort | f inactive | k safe | d dirty\n")
 	fmt.Fprintf(&b, "Filters: inactive(%s) safe-only(%s) dirty-only(%s)\n",
 		inactiveLabel, onOff(m.showOnlySafe), onOff(m.showOnlyDirty))
 
 	if m.showHelp {
-		b.WriteString("\nHelp: browse-only slice (#7). Cleanup/search/workspace in later issues.\n")
+		b.WriteString("\nHelp:\n")
+		b.WriteString("  x  cleanup preview | p dry-run | y confirm | n cancel\n")
 		b.WriteString("  s  toggle sort (size / inactive)\n")
 		b.WriteString("  f  cycle inactivity threshold (all, 30d, 90d, 180d)\n")
 		b.WriteString("  k  toggle safe-only (lockfile required)\n")
@@ -390,11 +438,58 @@ func (m model) View() string {
 			row.Manager, yesNo(row.HasLockfile), yesNo(row.Git.Dirty))
 		fmt.Fprintf(&b, "  node_modules: %s\n", row.NodeModulesPath)
 		fmt.Fprintf(&b, "  Restore: (cd %s && %s)\n", row.RepoPath, row.ReinstallCommand)
+		if m.mode == modeBrowse {
+			b.WriteString("  Next: press x for preview, then p (dry-run) or y (confirm).\n")
+		}
 	} else if m.loading {
 		b.WriteString("\nWaiting for first match…\n")
 	}
 
+	if m.mode == modePreview && len(filtered) > 0 && m.selected < len(filtered) {
+		row := filtered[m.selected]
+		b.WriteString("\nPreview (dry-run)\n")
+		fmt.Fprintf(&b, "  Target: %s\n", row.NodeModulesPath)
+		if m.assessmentBusy {
+			b.WriteString("  Assessing risk…\n")
+		} else if m.assessment != nil {
+			fmt.Fprintf(&b, "  Risk: %s | confidence: %s | guards: %s\n",
+				m.assessment.RiskLevel, m.assessment.Confidence,
+				assessmentGuardLabel(m.assessment))
+			if len(m.assessment.Warnings) > 0 {
+				fmt.Fprintf(&b, "  Warnings: %s\n", strings.Join(m.assessment.Warnings, ", "))
+			}
+		}
+		b.WriteString("  Keys: p run dry-run | y continue to confirm | n cancel | esc back\n")
+	}
+
+	if m.mode == modeConfirm && len(filtered) > 0 && m.selected < len(filtered) {
+		row := filtered[m.selected]
+		b.WriteString("\nConfirm cleanup: remove node_modules only (repository is not deleted).\n")
+		fmt.Fprintf(&b, "  Action: delete %s\n", row.NodeModulesPath)
+		b.WriteString("  Type the confirmation token exactly, then press Enter.\n")
+		fmt.Fprintf(&b, "  Token: %s\n", cleanup.BuildConfirmToken(row))
+		fmt.Fprintf(&b, "  Input: %s\n", m.confirmInput)
+		if m.cleanupBusy {
+			spin := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
+			fmt.Fprintf(&b, "  %s deleting node_modules…\n", spin)
+		}
+	}
+
+	if len(m.auditLog) > 0 {
+		b.WriteString("\nAudit log (also on stderr)\n")
+		for _, line := range m.auditLog {
+			fmt.Fprintf(&b, "  %s\n", line)
+		}
+	}
+
 	return b.String()
+}
+
+func assessmentGuardLabel(a *cleanup.Assessment) string {
+	if a.OK {
+		return "ok"
+	}
+	return strings.Join(a.Reasons, ", ")
 }
 
 func pageWindowStart(selected, total int) int {
