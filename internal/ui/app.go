@@ -317,23 +317,23 @@ func (m model) View() string {
 
 	titleStyle := lipgloss.NewStyle().Bold(true)
 	b.WriteString(titleStyle.Render("Repo Cleanup TUI (browse)") + "\n")
-	b.WriteString(fmt.Sprintf("Found %d repos | visible %d | reclaimable %s\n",
-		len(m.rows), len(filtered), formatBytes(totalReclaim)))
-	b.WriteString(fmt.Sprintf("Workspace: %s | sort: %s | selected %d/%d\n",
-		m.root, m.sortMode, selectionLabel(len(filtered), m.selected), len(filtered)))
+	fmt.Fprintf(&b, "Found %d repos | visible %d | reclaimable %s\n",
+		len(m.rows), len(filtered), formatBytes(totalReclaim))
+	fmt.Fprintf(&b, "Workspace: %s | sort: %s | selected %d/%d\n",
+		m.root, m.sortMode, selectionLabel(len(filtered), m.selected), len(filtered))
 
 	if m.loading {
 		spin := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-		b.WriteString(fmt.Sprintf("%s scanning %d dirs in %s\n", spin, m.dirsScanned, m.root))
-		b.WriteString(fmt.Sprintf("Discovery %s %d dirs | repos found %d\n",
-			indeterminateBar(m.spinnerFrame, discoveryBarWidth), m.dirsScanned, m.reposDiscovered))
+		fmt.Fprintf(&b, "%s scanning %d dirs in %s\n", spin, m.dirsScanned, m.root)
+		fmt.Fprintf(&b, "Discovery %s %d dirs | repos found %d\n",
+			indeterminateBar(m.spinnerFrame, discoveryBarWidth), m.dirsScanned, m.reposDiscovered)
 	} else {
-		b.WriteString(fmt.Sprintf("Scan complete in %s\n", m.root))
+		fmt.Fprintf(&b, "Scan complete in %s\n", m.root)
 	}
 
 	if m.reposDiscovered > 0 {
-		b.WriteString(fmt.Sprintf("Sizing %s %d/%d\n",
-			ratioBar(m.reposSized, m.reposDiscovered, sizingBarWidth), m.reposSized, m.reposDiscovered))
+		fmt.Fprintf(&b, "Sizing %s %d/%d\n",
+			ratioBar(m.reposSized, m.reposDiscovered, sizingBarWidth), m.reposSized, m.reposDiscovered)
 	}
 
 	inactiveLabel := "all"
@@ -341,8 +341,8 @@ func (m model) View() string {
 		inactiveLabel = fmt.Sprintf(">=%dd", m.minInactiveDays)
 	}
 	b.WriteString("Keys: q quit | ? help | r rescan | j/u move | s sort | f inactive | k safe | d dirty\n")
-	b.WriteString(fmt.Sprintf("Filters: inactive(%s) safe-only(%s) dirty-only(%s)\n",
-		inactiveLabel, onOff(m.showOnlySafe), onOff(m.showOnlyDirty)))
+	fmt.Fprintf(&b, "Filters: inactive(%s) safe-only(%s) dirty-only(%s)\n",
+		inactiveLabel, onOff(m.showOnlySafe), onOff(m.showOnlyDirty))
 
 	if m.showHelp {
 		b.WriteString("\nHelp: browse-only slice (#7). Cleanup/search/workspace in later issues.\n")
@@ -370,7 +370,7 @@ func (m model) View() string {
 		if row.InactiveDays != nil {
 			inactive = fmt.Sprintf("%dd", *row.InactiveDays)
 		}
-		b.WriteString(fmt.Sprintf("%s %8s | %7s | %s\n", prefix, formatBytes(row.Bytes), inactive, rel))
+		fmt.Fprintf(&b, "%s %8s | %7s | %s\n", prefix, formatBytes(row.Bytes), inactive, rel)
 	}
 
 	if m.loading && len(filtered) == 0 {
