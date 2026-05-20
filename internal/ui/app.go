@@ -379,17 +379,17 @@ func (m model) View() string {
 		b.WriteString("\nNo rows match filters.\n")
 	} else if len(filtered) > pageSize {
 		end := min(pageStart+pageSize, len(filtered))
-		b.WriteString(fmt.Sprintf("\nShowing %d-%d of %d\n", pageStart+1, end, len(filtered)))
+		fmt.Fprintf(&b, "\nShowing %d-%d of %d\n", pageStart+1, end, len(filtered))
 	}
 
 	if len(filtered) > 0 && m.selected < len(filtered) {
 		row := filtered[m.selected]
 		b.WriteString("\nSelected\n")
-		b.WriteString(fmt.Sprintf("  Repo: %s\n", row.RepoPath))
-		b.WriteString(fmt.Sprintf("  Manager: %s | lockfile: %s | dirty: %s\n",
-			row.Manager, yesNo(row.HasLockfile), yesNo(row.Git.Dirty)))
-		b.WriteString(fmt.Sprintf("  node_modules: %s\n", row.NodeModulesPath))
-		b.WriteString(fmt.Sprintf("  Restore: (cd %s && %s)\n", row.RepoPath, row.ReinstallCommand))
+		fmt.Fprintf(&b, "  Repo: %s\n", row.RepoPath)
+		fmt.Fprintf(&b, "  Manager: %s | lockfile: %s | dirty: %s\n",
+			row.Manager, yesNo(row.HasLockfile), yesNo(row.Git.Dirty))
+		fmt.Fprintf(&b, "  node_modules: %s\n", row.NodeModulesPath)
+		fmt.Fprintf(&b, "  Restore: (cd %s && %s)\n", row.RepoPath, row.ReinstallCommand)
 	} else if m.loading {
 		b.WriteString("\nWaiting for first match…\n")
 	}
