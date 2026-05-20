@@ -1,12 +1,20 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
+
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scanner"
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/wizard"
 )
 
-const notImplemented = "not implemented yet (see GitHub issue #5–#7)"
+const notImplemented = "not implemented yet (see GitHub issue #7)"
 
 func printHelp() {
 	fmt.Print(`repo-cleanup-tui — find reclaimable node_modules in local git repos
@@ -27,10 +35,7 @@ Environment:
 }
 
 func looksLikePath(arg string) bool {
-	if arg == "" {
-		return false
-	}
-	if strings.HasPrefix(arg, "-") {
+	if arg == "" || strings.HasPrefix(arg, "-") {
 		return false
 	}
 	switch arg {
@@ -40,16 +45,107 @@ func looksLikePath(arg string) bool {
 	return strings.Contains(arg, "/") || strings.HasPrefix(arg, ".") || strings.HasPrefix(arg, "~")
 }
 
-func stub(cmd string) {
-	fmt.Fprintf(os.Stderr, "repo-cleanup-tui %s: %s\n", cmd, notImplemented)
-	os.Exit(2)
+func expandPath(p string) (string, error) {
+	s := strings.TrimSpace(p)
+	if strings.HasPrefix(s, "~") {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		s = strings.Replace(s, "~", home, 1)
+	}
+	return filepath.Clean(s), nil
 }
 
-func runDefault(args []string) {
-	if len(args) > 0 && looksLikePath(args[0]) {
-		stub("tui")
+func resolveWorkspacePath(args []string, cwd string) (string, error) {
+	if len(args) > 0 && args[0] != "" {
+		return expandPath(args[0])
 	}
-	stub("tui")
+	cfg, err := config.Load(cwd)
+	if err != nil {
+		return "", err
+	}
+	if cfg.ActiveWorkspace != "" {
+		return cfg.ActiveWorkspace, nil
+	}
+	return cwd, nil
+}
+
+func runInit(args []string) int {
+	fs := flag.NewFlagSet("init", flag.ExitOnError)
+	force := fs.Bool("force", false, "overwrite existing config")
+	if err := fs.Parse(args); err != nil {
+		return 1
+	}
+	path := config.ConfigPath()
+	if err := wizard.RunInteractive(path, *force); err != nil {
+		if errors.Is(err, wizard.ErrUserAborted) {
+			return 1
+		}
+		fmt.Fprintf(os.Stderr, "repo-cleanup-tui init: %v\n", err)
+		return 1
+	}
+	fmt.Fprintf(os.Stderr, "Wrote %s\n", path)
+	return 0
+}
+
+func runScan(args []string) int {
+	asJSON := false
+	var pathArgs []string
+	for _, a := range args {
+		if a == "--json" {
+			asJSON = true
+			continue
+		}
+		pathArgs = append(pathArgs, a)
+	}
+	cwd, _ := os.Getwd()
+	root, err := resolveWorkspacePath(pathArgs, cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "repo-cleanup-tui scan: %v\n", err)
+		return 1
+	}
+
+	cfg, _ := config.Load(cwd)
+	ignore := config.DefaultIgnore
+	if cfg != nil {
+		ignore = cfg.IgnoreForActive()
+	}
+
+	rows, err := scanner.Scan(root, scanner.Options{IgnoreDirs: ignore})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "repo-cleanup-tui scan: %v\n", err)
+		return 1
+	}
+
+	if asJSON {
+		payload := struct {
+			RootPath string              `json:"rootPath"`
+			Count    int                 `json:"count"`
+			Rows     []scanner.Candidate `json:"rows"`
+		}{RootPath: root, Count: len(rows), Rows: rows}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(payload); err != nil {
+			fmt.Fprintf(os.Stderr, "repo-cleanup-tui scan: %v\n", err)
+			return 1
+		}
+		return 0
+	}
+
+	for _, row := range rows {
+		inactive := "unknown"
+		if row.InactiveDays != nil {
+			inactive = fmt.Sprintf("%d", *row.InactiveDays)
+		}
+		fmt.Printf("%s\t%d\t%s\t%s\n", row.RepoPath, row.Bytes, row.Manager, inactive)
+	}
+	return 0
+}
+
+func stubTUI() {
+	fmt.Fprintf(os.Stderr, "repo-cleanup-tui tui: %s\n", notImplemented)
+	os.Exit(2)
 }
 
 func main() {
@@ -59,7 +155,7 @@ func main() {
 	}
 
 	if len(args) == 0 {
-		runDefault(nil)
+		stubTUI()
 	}
 
 	switch args[0] {
@@ -67,17 +163,17 @@ func main() {
 		printHelp()
 		return
 	case "init":
-		stub("init")
+		os.Exit(runInit(args[1:]))
 	case "scan":
-		stub("scan")
+		os.Exit(runScan(args[1:]))
 	case "tui":
 		if len(args) > 1 {
-			_ = args[1]
+			_, _ = expandPath(args[1])
 		}
-		stub("tui")
+		stubTUI()
 	default:
 		if looksLikePath(args[0]) {
-			runDefault(args)
+			stubTUI()
 		}
 		fmt.Fprintf(os.Stderr, "repo-cleanup-tui: unknown command %q (try --help)\n", args[0])
 		os.Exit(2)
