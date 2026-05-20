@@ -11,10 +11,9 @@ import (
 
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scanner"
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/ui"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/wizard"
 )
-
-const notImplemented = "not implemented yet (see GitHub issue #7)"
 
 func printHelp() {
 	fmt.Print(`repo-cleanup-tui — find reclaimable node_modules in local git repos
@@ -143,9 +142,23 @@ func runScan(args []string) int {
 	return 0
 }
 
-func stubTUI() {
-	fmt.Fprintf(os.Stderr, "repo-cleanup-tui tui: %s\n", notImplemented)
-	os.Exit(2)
+func runTUI(pathArgs []string) int {
+	cwd, _ := os.Getwd()
+	root, err := resolveWorkspacePath(pathArgs, cwd)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "repo-cleanup-tui: %v\n", err)
+		return 1
+	}
+	cfg, _ := config.Load(cwd)
+	ignore := config.DefaultIgnore
+	if cfg != nil {
+		ignore = cfg.IgnoreForActive()
+	}
+	if err := ui.Run(root, ignore); err != nil {
+		fmt.Fprintf(os.Stderr, "repo-cleanup-tui: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
 func main() {
@@ -155,7 +168,7 @@ func main() {
 	}
 
 	if len(args) == 0 {
-		stubTUI()
+		os.Exit(runTUI(nil))
 	}
 
 	switch args[0] {
@@ -167,13 +180,10 @@ func main() {
 	case "scan":
 		os.Exit(runScan(args[1:]))
 	case "tui":
-		if len(args) > 1 {
-			_, _ = expandPath(args[1])
-		}
-		stubTUI()
+		os.Exit(runTUI(args[1:]))
 	default:
 		if looksLikePath(args[0]) {
-			stubTUI()
+			os.Exit(runTUI(args))
 		}
 		fmt.Fprintf(os.Stderr, "repo-cleanup-tui: unknown command %q (try --help)\n", args[0])
 		os.Exit(2)
