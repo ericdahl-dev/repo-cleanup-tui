@@ -23,6 +23,7 @@ node_modules
 
 # Local scan cache written under scanned roots
 .repo-cleanup-tui-scan-cache.json
+/repo-cleanup-tui
 
 # Cursor IDE
 .cursor/
