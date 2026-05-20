@@ -59,15 +59,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Enable Corepack
+        run: corepack enable
+
       - name: Setup Node + Yarn cache
         uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node }}
           cache: yarn
           cache-dependency-path: yarn.lock
-
-      - name: Enable Corepack
-        run: corepack enable
 
       - name: Install dependencies
         run: yarn install --immutable

@@ -17,9 +17,9 @@ func TestPrintHelpDocumentsSubcommands(t *testing.T) {
 	}
 	os.Stdout = w
 	printHelp()
-	w.Close()
+	_ = w.Close()
 	os.Stdout = old
-	io.Copy(&buf, r)
+	_, _ = io.Copy(&buf, r)
 	out := buf.String()
 	for _, sub := range []string{"init", "scan", "tui", "--json"} {
 		if !strings.Contains(out, sub) {
