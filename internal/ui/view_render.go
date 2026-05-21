@@ -93,13 +93,14 @@ func (m model) renderFilterBar() string {
 	}
 	row := lipgloss.JoinHorizontal(lipgloss.Top, chips...)
 	keys := styleKeyHint.Render("keys ") +
-		styleKey.Render("?") + styleKeyHint.Render(" help ") +
-		styleKey.Render("/") + styleKeyHint.Render(" find ") +
-		styleKey.Render("w") + styleKeyHint.Render(" root ") +
-		styleKey.Render("r") + styleKeyHint.Render(" scan ") +
-		styleKey.Render("x") + styleKeyHint.Render(" clean ") +
-		styleKey.Render("[") + styleKey.Render("]") + styleKeyHint.Render(" page ") +
-		styleKey.Render("q") + styleKeyHint.Render(" quit")
+		keyLegend("?", "help") +
+		keyLegend("/", "find") +
+		keyLegend("f", "filter") +
+		keyLegend("w", "root") +
+		keyLegend("r", "scan") +
+		keyLegend("x", "clean") +
+		keyLegend("[ ]", "page") +
+		keyLegend("q", "quit")
 	return lipgloss.JoinVertical(lipgloss.Left, row, keys)
 }
 

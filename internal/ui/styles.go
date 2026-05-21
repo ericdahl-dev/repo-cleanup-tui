@@ -124,6 +124,10 @@ func filterChip(label string, on bool) string {
 	return styleChipOff.Render(label)
 }
 
+func keyLegend(key, label string) string {
+	return styleKey.Render(key) + styleKeyHint.Render(" "+label+" ")
+}
+
 func truncatePath(s string, max int) string {
 	if max < 8 || len(s) <= max {
 		return s
