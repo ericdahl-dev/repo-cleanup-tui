@@ -144,11 +144,19 @@ func (m model) renderTable(filtered []scanner.Candidate) string {
 	return panel
 }
 
+func (m model) detailPathWidth() int {
+	if m.width >= wideLayoutMinWidth {
+		return detailPanelWidth - 4
+	}
+	return max(20, m.width-8)
+}
+
 func (m model) renderSelectionDetail(row scanner.Candidate) string {
+	pathW := m.detailPathWidth()
 	title := styleSubtitle.Render("selected")
 	lines := []string{
 		lipgloss.JoinHorizontal(lipgloss.Top,
-			styleDetailLabel.Render("repo "), styleDetailValue.Render(truncatePath(row.RepoPath, m.width-8))),
+			styleDetailLabel.Render("repo "), styleDetailValue.Render(truncatePath(row.RepoPath, pathW))),
 		lipgloss.JoinHorizontal(lipgloss.Top,
 			styleDetailLabel.Render("manager "),
 			managerStyle(row.Manager).Render(string(row.Manager)),
@@ -162,7 +170,7 @@ func (m model) renderSelectionDetail(row scanner.Candidate) string {
 			styleStatReclaim.Render(formatBytes(row.Bytes)),
 		),
 		styleDetailLabel.Render("restore") + " " +
-			styleDetailValue.Render(fmt.Sprintf("(cd %s && %s)", truncatePath(row.RepoPath, 40), row.ReinstallCommand)),
+			styleDetailValue.Render(fmt.Sprintf("(cd %s && %s)", truncatePath(row.RepoPath, pathW), row.ReinstallCommand)),
 	}
 	if m.showGitContext && row.Git.Branch != "" {
 		lines = append(lines, styleDetailLabel.Render("branch ")+styleDetailValue.Render(row.Git.Branch))
@@ -276,10 +284,10 @@ func indeterminateBarStyled(frame, width int) string {
 	filled := frame % width
 	var b strings.Builder
 	for i := 0; i < width; i++ {
-		switch {
-		case i == filled:
+		switch i {
+		case filled:
 			b.WriteString("█")
-		case i == filled-1 || i == filled+1:
+		case filled - 1, filled + 1:
 			b.WriteString("▓")
 		default:
 			b.WriteString("░")

@@ -77,7 +77,6 @@ var (
 			Padding(0, 1)
 
 	styleProgress = lipgloss.NewStyle().Foreground(colorTeal)
-	styleProgressTrack = lipgloss.NewStyle().Foreground(colorDim)
 
 	styleDetailLabel = lipgloss.NewStyle().Foreground(colorDim)
 	styleDetailValue = lipgloss.NewStyle().Foreground(colorInk)

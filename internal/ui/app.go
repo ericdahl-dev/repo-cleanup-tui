@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/cleanup"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scancache"
@@ -425,10 +426,33 @@ func (m model) View() string {
 		parts = append(parts, RenderHelp(m.width))
 	}
 	parts = append(parts, m.renderTable(filtered))
+
+	var detail string
 	if len(filtered) > 0 && m.selected < len(filtered) {
-		parts = append(parts, m.renderSelectionDetail(filtered[m.selected]))
+		detail = m.renderSelectionDetail(filtered[m.selected])
 	} else if m.loading {
-		parts = append(parts, styleStatLabel.Render("◌ waiting for first match…"))
+		detail = styleStatLabel.Render("◌ waiting for first match…")
+	}
+
+	wide := m.useWideDetailPanel(len(filtered)) && detail != ""
+	if wide {
+		leftW := m.width - detailPanelWidth - 2
+		if leftW < 40 {
+			leftW = 40
+		}
+		left := lipgloss.NewStyle().Width(leftW).Render(strings.Join(parts, "\n"))
+		out := lipgloss.JoinHorizontal(lipgloss.Top, left, detail)
+		if banner := m.renderModeBanner(); banner != "" {
+			out += "\n" + banner
+		}
+		if audit := m.renderAudit(); audit != "" {
+			out += "\n" + audit
+		}
+		return out
+	}
+
+	if detail != "" {
+		parts = append(parts, detail)
 	}
 	if banner := m.renderModeBanner(); banner != "" {
 		parts = append(parts, banner)
