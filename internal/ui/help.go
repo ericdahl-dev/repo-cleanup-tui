@@ -25,8 +25,20 @@ const helpMarkdown = `# repo-cleanup-tui · keybindings
 | **x** | Cleanup preview |
 | **/** | Search by path or branch |
 | **c** | Clear search |
-| **w** | Switch workspace |
+| **w** | Switch workspace (quick path) |
+| **m** | Workspace manager (add/edit/remove) |
 | **?** | Toggle this help |
+
+## Workspace manager
+| Key | Action |
+|-----|--------|
+| **j** / **↓** | Next workspace |
+| **u** / **↑** | Previous workspace |
+| **enter** | Set active workspace, save, return and rescan |
+| **a** | Add workspace path |
+| **i** | Edit ignore dirs for selection |
+| **delete** / **backspace** | Remove workspace (keeps at least one) |
+| **esc** / **q** | Back to list or browse |
 
 ## Search
 | Key | Action |
@@ -92,7 +104,8 @@ func fallbackHelpText() string {
   x              cleanup preview
   /              search
   c              clear search
-  w              workspace
+  w              workspace path
+  m              workspace manager
   ?              help
   p              dry-run
   y              confirm step

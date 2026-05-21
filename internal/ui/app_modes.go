@@ -56,14 +56,13 @@ func (m *model) applyWorkspace(input string) tea.Cmd {
 		m.mode = modeBrowse
 		return nil
 	}
-	updated := m.cfg.UpsertWorkspace(target)
-	m.cfg = updated
-	if err := m.cfg.Save(); err != nil {
+	updated := m.ensureConfig().UpsertWorkspace(target)
+	if err := m.saveConfig(updated); err != nil {
 		m.appendAudit("failed save config reason=" + err.Error())
 		m.mode = modeBrowse
 		return nil
 	}
-	m.root = target
+	m.root = updated.ActiveWorkspace
 	m.ignore = m.cfg.IgnoreForActive()
 	m.mode = modeBrowse
 	m.workspaceInput = ""

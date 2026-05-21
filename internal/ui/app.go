@@ -50,8 +50,12 @@ type model struct {
 	showHelp        bool
 	showGitContext  bool
 	searchQuery     string
-	workspaceInput  string
-	cfg             *config.Config
+	workspaceInput   string
+	cfg              *config.Config
+	wsMgrPane        wsMgrPane
+	wsMgrSel         int
+	wsMgrInput       string
+	wsPendingRescan  bool
 	selected        int
 	width           int
 	mode            uiMode
@@ -259,6 +263,15 @@ func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
 			m.workspaceInput = ""
 			return false, nil
 		}
+		if m.mode == modeWorkspaceManager {
+			if m.wsMgrPane != wsMgrList {
+				m.wsMgrPane = wsMgrList
+				m.wsMgrInput = ""
+				return false, nil
+			}
+			cmd := m.leaveWorkspaceManager()
+			return false, cmd
+		}
 		if m.mode != modeBrowse {
 			m.mode = modeBrowse
 			m.confirmInput = ""
@@ -274,6 +287,9 @@ func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
 	}
 	if m.mode == modeWorkspace {
 		return m.handleWorkspaceKey(msg)
+	}
+	if m.mode == modeWorkspaceManager {
+		return m.handleWorkspaceManagerKey(msg)
 	}
 	if m.mode == modePreview {
 		if quit, cmd := m.handlePreviewKey(msg); quit || cmd != nil {
@@ -335,6 +351,8 @@ func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
 	case "w":
 		m.mode = modeWorkspace
 		m.workspaceInput = m.root
+	case "m":
+		m.openWorkspaceManager()
 	case "g":
 		m.showGitContext = !m.showGitContext
 	case "down", "j":
@@ -410,6 +428,10 @@ func (m *model) clampSelection(n int) {
 }
 
 func (m model) View() string {
+	if m.mode == modeWorkspaceManager {
+		return m.renderWorkspaceManagerView()
+	}
+
 	filtered := m.filtered()
 	totalReclaim := int64(0)
 	for _, row := range filtered {

@@ -15,6 +15,8 @@ func TestRenderHelpDocumentsBrowseAndCleanupKeys(t *testing.T) {
 		"search",
 		"w",
 		"workspace",
+		"Workspace manager",
+		"m",
 		"r",
 		"rescan",
 	} {

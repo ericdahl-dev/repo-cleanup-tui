@@ -80,3 +80,54 @@ func TestLoadRoundTrip(t *testing.T) {
 		t.Fatalf("workspaces: %+v", loaded.Workspaces)
 	}
 }
+
+func TestSetActiveAndAddRemoveWorkspace(t *testing.T) {
+	cfg := Default("/tmp/a")
+	cfg.Workspaces = append(cfg.Workspaces, Workspace{Path: "/tmp/b", Ignore: DefaultIgnore})
+
+	active, err := cfg.SetActive("/tmp/b")
+	if err != nil || active.ActiveWorkspace != "/tmp/b" {
+		t.Fatalf("SetActive: %v active=%q", err, active.ActiveWorkspace)
+	}
+
+	withC, err := active.AddWorkspace("/tmp/c")
+	if err != nil || len(withC.Workspaces) != 3 {
+		t.Fatalf("AddWorkspace: %v len=%d", err, len(withC.Workspaces))
+	}
+
+	removed, err := withC.RemoveWorkspace("/tmp/b")
+	if err != nil || len(removed.Workspaces) != 2 {
+		t.Fatalf("RemoveWorkspace: %v len=%d", err, len(removed.Workspaces))
+	}
+	if removed.ActiveWorkspace != "/tmp/a" {
+		t.Fatalf("active after remove active entry: got %q want /tmp/a", removed.ActiveWorkspace)
+	}
+
+	oneLeft, err := removed.RemoveWorkspace("/tmp/a")
+	if err != nil || len(oneLeft.Workspaces) != 1 {
+		t.Fatalf("RemoveWorkspace to one: %v len=%d", err, len(oneLeft.Workspaces))
+	}
+	_, err = oneLeft.RemoveWorkspace("/tmp/c")
+	if err != ErrLastWorkspace {
+		t.Fatalf("RemoveWorkspace last: got %v", err)
+	}
+}
+
+func TestSetWorkspaceIgnoresAndParseIgnoreList(t *testing.T) {
+	cfg := Default("/tmp/a")
+	updated, err := cfg.SetWorkspaceIgnores("/tmp/a", []string{"vendor", ".git"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(updated.Workspaces[0].Ignore) != 2 || updated.Workspaces[0].Ignore[0] != "vendor" {
+		t.Fatalf("ignores: %+v", updated.Workspaces[0].Ignore)
+	}
+
+	got := ParseIgnoreList("node_modules, .git , dist")
+	if len(got) != 3 || got[2] != "dist" {
+		t.Fatalf("ParseIgnoreList: %+v", got)
+	}
+	if FormatIgnoreList(got) != "node_modules, .git, dist" {
+		t.Fatalf("FormatIgnoreList: %q", FormatIgnoreList(got))
+	}
+}

@@ -7,8 +7,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BurntSushi/toml"
+)
+
+var (
+	ErrWorkspaceNotFound = errors.New("workspace not found")
+	ErrLastWorkspace     = errors.New("cannot remove last workspace")
 )
 
 var DefaultIgnore = []string{
@@ -193,6 +199,122 @@ func (c *Config) UpsertWorkspace(rootPath string) *Config {
 	}
 	out.ActiveWorkspace = resolved
 	return &out
+}
+
+// Clone returns a shallow copy of the config (including workspace ignore slices).
+func (c *Config) Clone() *Config {
+	if c == nil {
+		return nil
+	}
+	out := *c
+	out.Workspaces = make([]Workspace, len(c.Workspaces))
+	for i, ws := range c.Workspaces {
+		out.Workspaces[i] = Workspace{
+			Path:   ws.Path,
+			Ignore: append([]string(nil), ws.Ignore...),
+		}
+	}
+	return &out
+}
+
+func (c *Config) workspaceIndex(path string) int {
+	resolved := filepath.Clean(path)
+	for i, ws := range c.Workspaces {
+		if ws.Path == resolved {
+			return i
+		}
+	}
+	return -1
+}
+
+// SetActive marks an existing workspace as active.
+func (c *Config) SetActive(path string) (*Config, error) {
+	if c.workspaceIndex(path) < 0 {
+		return nil, ErrWorkspaceNotFound
+	}
+	out := c.Clone()
+	out.ActiveWorkspace = filepath.Clean(path)
+	return out, nil
+}
+
+// AddWorkspace appends a workspace if the path is not already listed.
+func (c *Config) AddWorkspace(path string) (*Config, error) {
+	resolved, err := filepath.Abs(filepath.Clean(strings.TrimSpace(path)))
+	if err != nil {
+		return nil, err
+	}
+	if resolved == "" {
+		return nil, errors.New("workspace path is required")
+	}
+	if c.workspaceIndex(resolved) >= 0 {
+		return c.Clone(), nil
+	}
+	out := c.Clone()
+	out.Workspaces = append(out.Workspaces, Workspace{
+		Path:   resolved,
+		Ignore: append([]string(nil), DefaultIgnore...),
+	})
+	return out, nil
+}
+
+// RemoveWorkspace deletes a workspace entry; at least one must remain.
+func (c *Config) RemoveWorkspace(path string) (*Config, error) {
+	if len(c.Workspaces) <= 1 {
+		return nil, ErrLastWorkspace
+	}
+	idx := c.workspaceIndex(path)
+	if idx < 0 {
+		return nil, ErrWorkspaceNotFound
+	}
+	out := c.Clone()
+	out.Workspaces = append(append([]Workspace(nil), out.Workspaces[:idx]...), out.Workspaces[idx+1:]...)
+	if out.ActiveWorkspace == filepath.Clean(path) {
+		out.ActiveWorkspace = out.Workspaces[0].Path
+	}
+	return out, nil
+}
+
+// SetWorkspaceIgnores updates ignore dirs for an existing workspace.
+func (c *Config) SetWorkspaceIgnores(path string, ignore []string) (*Config, error) {
+	idx := c.workspaceIndex(path)
+	if idx < 0 {
+		return nil, ErrWorkspaceNotFound
+	}
+	out := c.Clone()
+	if len(ignore) == 0 {
+		ignore = append([]string(nil), DefaultIgnore...)
+	}
+	out.Workspaces[idx].Ignore = append([]string(nil), ignore...)
+	return out, nil
+}
+
+// ParseIgnoreList splits comma/space-separated ignore tokens for the workspace manager.
+func ParseIgnoreList(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return append([]string(nil), DefaultIgnore...)
+	}
+	var out []string
+	for _, part := range strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == ' ' || r == '\t'
+	}) {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	if len(out) == 0 {
+		return append([]string(nil), DefaultIgnore...)
+	}
+	return out
+}
+
+// FormatIgnoreList renders ignore dirs for editing in the TUI.
+func FormatIgnoreList(ignore []string) string {
+	if len(ignore) == 0 {
+		return strings.Join(DefaultIgnore, ", ")
+	}
+	return strings.Join(ignore, ", ")
 }
 
 func (c *Config) IgnoreForActive() []string {

@@ -19,6 +19,15 @@ const (
 	modeConfirm
 	modeSearch
 	modeWorkspace
+	modeWorkspaceManager
+)
+
+type wsMgrPane int
+
+const (
+	wsMgrList wsMgrPane = iota
+	wsMgrAddPath
+	wsMgrEditIgnores
 )
 
 type assessmentMsg struct {
