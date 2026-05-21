@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/cleanup"
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scanner"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/view"
 )
@@ -48,6 +49,10 @@ type model struct {
 	showOnlySafe    bool
 	showOnlyDirty   bool
 	showHelp        bool
+	showGitContext  bool
+	searchQuery     string
+	workspaceInput  string
+	cfg             *config.Config
 	selected        int
 	width           int
 	mode            uiMode
@@ -67,22 +72,24 @@ type scanEvent struct {
 }
 
 // Run starts the browse TUI for the given workspace root.
-func Run(root string, ignore []string) error {
-	m := newModel(root, ignore)
+func Run(root string, ignore []string, cfg *config.Config) error {
+	m := newModel(root, ignore, cfg)
 	_, err := tea.NewProgram(m, tea.WithAltScreen()).Run()
 	return err
 }
 
-func newModel(root string, ignore []string) model {
+func newModel(root string, ignore []string, cfg *config.Config) model {
 	return model{
-		root:         root,
-		ignore:       ignore,
-		loading:      true,
-		sortMode:     view.SortSize,
+		root:            root,
+		ignore:          ignore,
+		cfg:             cfg,
+		workspaceInput:  root,
+		loading:         true,
+		sortMode:        view.SortSize,
 		minInactiveDays: 90,
-		showOnlySafe: true,
-		scanCh:       make(chan scanEvent, 64),
-		width:        80,
+		showOnlySafe:    true,
+		scanCh:          make(chan scanEvent, 64),
+		width:           80,
 	}
 }
 
@@ -145,6 +152,7 @@ func (m model) filtered() []scanner.Candidate {
 		ShowOnlySafe:    m.showOnlySafe,
 		ShowOnlyDirty:   m.showOnlyDirty,
 		SortMode:        m.sortMode,
+		SearchQuery:     m.searchQuery,
 	})
 }
 
@@ -224,6 +232,11 @@ func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
 			m.showHelp = false
 			return false, nil
 		}
+		if m.mode == modeSearch || m.mode == modeWorkspace {
+			m.mode = modeBrowse
+			m.workspaceInput = ""
+			return false, nil
+		}
 		if m.mode != modeBrowse {
 			m.mode = modeBrowse
 			m.confirmInput = ""
@@ -234,6 +247,12 @@ func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
 		return true, nil
 	}
 
+	if m.mode == modeSearch {
+		return m.handleSearchKey(msg)
+	}
+	if m.mode == modeWorkspace {
+		return m.handleWorkspaceKey(msg)
+	}
 	if m.mode == modePreview {
 		if quit, cmd := m.handlePreviewKey(msg); quit || cmd != nil {
 			return quit, cmd
@@ -286,6 +305,16 @@ func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
 		m.clampSelection(len(m.filtered()))
 	case "?":
 		m.showHelp = !m.showHelp
+	case "/":
+		m.mode = modeSearch
+	case "c":
+		m.searchQuery = ""
+		m.clampSelection(len(m.filtered()))
+	case "w":
+		m.mode = modeWorkspace
+		m.workspaceInput = m.root
+	case "g":
+		m.showGitContext = !m.showGitContext
 	case "down", "j":
 		if m.selected < len(filtered)-1 {
 			m.selected++
@@ -387,21 +416,29 @@ func (m model) View() string {
 	if m.minInactiveDays > 0 {
 		inactiveLabel = fmt.Sprintf(">=%dd", m.minInactiveDays)
 	}
-	b.WriteString("Keys: q quit | ? help | r rescan | x cleanup | j/u move | s sort | f inactive | k safe | d dirty\n")
-	fmt.Fprintf(&b, "Filters: inactive(%s) safe-only(%s) dirty-only(%s)\n",
-		inactiveLabel, onOff(m.showOnlySafe), onOff(m.showOnlyDirty))
+	b.WriteString("Keys: q quit | ? help | / search | c clear | w workspace | g git | r rescan | x cleanup | j/u move\n")
+	b.WriteString("      s sort | f inactive | k safe | d dirty\n")
+	fmt.Fprintf(&b, "Filters: inactive(%s) safe-only(%s) dirty-only(%s) search(%q)\n",
+		inactiveLabel, onOff(m.showOnlySafe), onOff(m.showOnlyDirty), m.searchQuery)
 
 	if m.showHelp {
-		b.WriteString("\nHelp:\n")
-		b.WriteString("  x  cleanup preview | p dry-run | y confirm | n cancel\n")
-		b.WriteString("  s  toggle sort (size / inactive)\n")
-		b.WriteString("  f  cycle inactivity threshold (all, 30d, 90d, 180d)\n")
-		b.WriteString("  k  toggle safe-only (lockfile required)\n")
-		b.WriteString("  d  toggle dirty-only\n")
-		b.WriteString("  r  full rescan (no cache)\n")
+		b.WriteString("\n")
+		b.WriteString(RenderHelp(m.width))
+		b.WriteString("\n")
 	}
 
-	b.WriteString("\n      size | inactive | repo\n")
+	if m.mode == modeSearch {
+		fmt.Fprintf(&b, "\nSearch: %q (enter apply, esc cancel)\n", m.searchQuery)
+	}
+	if m.mode == modeWorkspace {
+		fmt.Fprintf(&b, "\nWorkspace path: %s (enter save+rescan, esc cancel)\n", m.workspaceInput)
+	}
+
+	if m.showGitContext {
+		b.WriteString("\n      branch | dirty |     size | inactive | repo\n")
+	} else {
+		b.WriteString("\n      size | inactive | repo\n")
+	}
 	pageStart := pageWindowStart(m.selected, len(filtered))
 	visible := filtered[pageStart:min(pageStart+pageSize, len(filtered))]
 	for i, row := range visible {
@@ -418,7 +455,16 @@ func (m model) View() string {
 		if row.InactiveDays != nil {
 			inactive = fmt.Sprintf("%dd", *row.InactiveDays)
 		}
-		fmt.Fprintf(&b, "%s %8s | %7s | %s\n", prefix, formatBytes(row.Bytes), inactive, rel)
+		if m.showGitContext {
+			branch := row.Git.Branch
+			if branch == "" {
+				branch = "-"
+			}
+			fmt.Fprintf(&b, "%s %6s | %5s | %8s | %7s | %s\n",
+				prefix, branch, yesNo(row.Git.Dirty), formatBytes(row.Bytes), inactive, rel)
+		} else {
+			fmt.Fprintf(&b, "%s %8s | %7s | %s\n", prefix, formatBytes(row.Bytes), inactive, rel)
+		}
 	}
 
 	if m.loading && len(filtered) == 0 {
@@ -434,8 +480,12 @@ func (m model) View() string {
 		row := filtered[m.selected]
 		b.WriteString("\nSelected\n")
 		fmt.Fprintf(&b, "  Repo: %s\n", row.RepoPath)
-		fmt.Fprintf(&b, "  Manager: %s | lockfile: %s | dirty: %s\n",
+		fmt.Fprintf(&b, "  Manager: %s | lockfile: %s | dirty: %s",
 			row.Manager, yesNo(row.HasLockfile), yesNo(row.Git.Dirty))
+		if m.showGitContext {
+			fmt.Fprintf(&b, " | branch: %s", row.Git.Branch)
+		}
+		b.WriteString("\n")
 		fmt.Fprintf(&b, "  node_modules: %s\n", row.NodeModulesPath)
 		fmt.Fprintf(&b, "  Restore: (cd %s && %s)\n", row.RepoPath, row.ReinstallCommand)
 		if m.mode == modeBrowse {
