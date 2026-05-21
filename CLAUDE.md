@@ -66,13 +66,14 @@ Project uses single-context layout: one root `CONTEXT.md` and root `docs/adr/`. 
 
 ## Build & Test
 
-_Add your build and test commands here_
+Go-only (TypeScript stack removed after MVP port).
 
 ```bash
-# Example:
-# npm install
-# npm test
+go test -race ./...
+go build -o repo-cleanup-tui .
 ```
+
+Release: tag `v*` → `.github/workflows/release.yml` (GoReleaser). Homebrew via `ericdahl-dev/tap/repo-cleanup-tui`.
 
 ## Architecture Overview
 

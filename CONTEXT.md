@@ -92,7 +92,7 @@ _Avoid_: git status, repo status, shell git
 - "repo" — in UI/logs often means **Candidate** (one git repo), not the whole **Workspace**.
 - Go migration scope — resolved: **MVP first** (scan, list, filters, cleanup gates, `scan --json`, `init`); full TS parity later.
 - Config format — resolved: **TOML** at `~/.config/repo-cleanup-tui/config.toml`; optional one-time read of legacy JSON.
-- Codebase strategy — resolved: **in-place** Go (`main.go`, `internal/`); remove TypeScript when Go MVP ships (no long dual stack).
+- Codebase strategy — resolved: **Go-only** (`main.go`, `internal/`); TypeScript/Ink stack removed after MVP port.
 - Distribution — resolved: match **git-green** (Goreleaser, golangci, release workflow, `ericdahl-dev/tap`, `go install`).
 - Scan cache — resolved: **none in MVP**; every **Scan** is full; `r` forces repeat **Scan**. Disk cache later if needed.
 - Scan progress UX — resolved: **two progress bars** (**Discovery phase** + **Sizing phase**); stream **Candidates** into list as sizing completes.
