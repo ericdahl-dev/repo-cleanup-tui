@@ -77,7 +77,6 @@ var (
 			Padding(0, 1)
 
 	styleProgress = lipgloss.NewStyle().Foreground(colorTeal)
-	styleProgressTrack = lipgloss.NewStyle().Foreground(colorDim)
 
 	styleDetailLabel = lipgloss.NewStyle().Foreground(colorDim)
 	styleDetailValue = lipgloss.NewStyle().Foreground(colorInk)
@@ -123,6 +122,10 @@ func filterChip(label string, on bool) string {
 		return styleChipOn.Render(label)
 	}
 	return styleChipOff.Render(label)
+}
+
+func keyLegend(key, label string) string {
+	return styleKey.Render(key) + styleKeyHint.Render(" "+label+" ")
 }
 
 func truncatePath(s string, max int) string {

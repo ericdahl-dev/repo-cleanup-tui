@@ -1,12 +1,12 @@
 # repo-cleanup-tui
 
-![repo-cleanup-tui app rendering](docs/repo-cleanup-tui-render.svg)
+![repo-cleanup-tui browse view](docs/screenshot.png)
 
-TUI scanner for reclaimable Node disk usage in repo folders.
+TUI for finding reclaimable `node_modules` folders under a workspace, sorting by size, and cleaning up only when package managers can restore dependencies.
 
 ## Goal
 
-Find `node_modules` in git repos, sort by reclaimable size, filter by inactivity, and only suggest cleanup that package managers can safely restore.
+Scan git repos with `package.json` + `node_modules`, show reclaimable disk, filter by inactivity and safety, and delete `node_modules` behind preview + confirmation — never the repo itself.
 
 ## Install
 
@@ -20,7 +20,7 @@ Formula updates on each `v*` tag via GoReleaser ([homebrew-tap](https://github.c
 
 ### Go
 
-Requires [Go 1.24+](https://go.dev/dl/). If your installed `go` is older, the toolchain will auto-download a newer one (that message is normal).
+Requires [Go 1.24+](https://go.dev/dl/). If your installed `go` is older, the toolchain may auto-download a newer one (that message is normal).
 
 ```bash
 go install github.com/ericdahl-dev/repo-cleanup-tui@latest
@@ -42,10 +42,12 @@ go build -o repo-cleanup-tui .
 
 ```bash
 repo-cleanup-tui                  # TUI for cwd or configured workspace
-repo-cleanup-tui /path/to/repos   # TUI for a specific root
+repo-cleanup-tui /path/to/repos   # TUI for a specific root (e.g. ~/Documents/GitHub)
 repo-cleanup-tui init             # write ~/.config/repo-cleanup-tui/config.toml
 repo-cleanup-tui scan --json .    # machine-readable scan
 ```
+
+On cold start the TUI loads a local scan cache (`.repo-cleanup-tui-scan-cache.json`, 10 minute TTL) when signatures still match. Press `r` for a full rescan.
 
 ## Commands
 
@@ -57,27 +59,30 @@ repo-cleanup-tui scan --json .    # machine-readable scan
 | `repo-cleanup-tui init --force` | Overwrite existing config |
 | `repo-cleanup-tui scan [--json] [path]` | Scan workspace; `--json` prints candidates |
 
-## Controls
+## Controls (browse)
 
-- `q` / `esc`: quit (or back from search/workspace/preview)
-- `?`: toggle help overlay
-- `s`: toggle sort (`size` / `inactive`)
-- `f`: inactivity filter (`all` → `>=30d` → `>=90d` → `>=180d`)
-- `k`: safe-only toggle (lockfile required)
-- `d`: dirty-only toggle
-- `g`: toggle git context columns
-- `j` / `u` (or arrows): move selection
-- `r`: full rescan
-- `/`: search repo path or branch; `c` clear search
-- `w`: switch workspace (saved to config, then rescan)
-- `x`: cleanup preview → `p` dry-run, `y` confirm, token + Enter to delete `node_modules`
+| Key | Action |
+|-----|--------|
+| `j` / `↓`, `u` / `↑` | Next / previous row |
+| `[` / `]` | Page up / down (20 rows) |
+| `?` | Toggle help overlay |
+| `s` | Toggle sort (`size` / `inactive`) |
+| `f` | Inactivity filter (`all` → `≥30d` → `≥90d` → `≥180d`) |
+| `k` | Safe-only (lockfile required) |
+| `d` | Dirty-only |
+| `g` | Git columns (branch, dirty) |
+| `r` | Full rescan (bypasses cache) |
+| `/` | Search path or branch; `c` clear |
+| `w` | Switch workspace (saved to config, rescan) |
+| `x` | Cleanup preview → `p` dry-run, `y` confirm, type token + Enter |
+| `q` / `esc` | Quit or back from sub-modes |
 
 ## Development
 
 ```bash
 go test -race ./...
 go build -o repo-cleanup-tui .
-golangci-lint run   # optional; matches CI
+golangci-lint run   # same as CI
 ```
 
 ## Release
@@ -85,25 +90,22 @@ golangci-lint run   # optional; matches CI
 Tag a version to build cross-platform archives, checksums, GitHub release assets, and update the Homebrew formula:
 
 ```bash
-git tag v0.1.2
-git push origin v0.1.2
+git tag v0.1.3
+git push origin v0.1.3
 ```
 
 The [release workflow](.github/workflows/release.yml) runs GoReleaser. Set repository secret `HOMEBREW_TAP_GITHUB_TOKEN` (PAT with push access to `ericdahl-dev/homebrew-tap`) so the tap formula updates automatically.
 
-## Safety behavior
+## Safety
 
-- Scans only repos that contain `.git`, `package.json`, and `node_modules`.
-- Detects package manager via lockfile.
-- Shows restore command (`yarn install --immutable`, `pnpm install --frozen-lockfile`, `npm ci`, `bun install --frozen-lockfile`).
-- Cleanup is gated behind `x` → preview → typed confirmation token.
-- Preview supports dry-run before deletion.
-- Guards block deletion unless lockfile exists and target is exact `repo/node_modules`.
-- Manager-aware risk checks block unsafe cleanup (unknown manager, Yarn zero-install cache, missing lockfile).
-- Audit log prints each dry-run/delete/block event to stderr.
+- Scans only repos with `.git`, `package.json`, and `node_modules`.
+- Detects package manager via lockfile; shows restore command per manager.
+- Cleanup: `x` → preview → typed confirmation token; deletes `node_modules` only.
+- Guards: lockfile required, exact `node_modules` path, manager-aware risk checks.
+- Audit log on stderr for dry-run, delete, and block events.
 
-## Trust posture
+## Trust
 
-- local-first and no telemetry
-- explicit user-triggered actions only
-- safety gates before deletion
+- Local-first, no telemetry
+- Explicit user actions only
+- Safety gates before deletion

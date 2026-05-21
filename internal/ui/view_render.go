@@ -30,24 +30,32 @@ func (m model) renderHeader(totalReclaim int64, visible int) string {
 		styleStatLabel.Render("  cursor "),
 		styleStatValue.Render(fmt.Sprintf("%d/%d", selectionLabel(visible, m.selected), visible)),
 	)
-	body := lipgloss.JoinVertical(lipgloss.Left, title, sub, line1, line2)
-	return stylePanel.Render(body)
+	bodyParts := []string{title, sub, line1, line2}
+	if m.loading {
+		bodyParts = append(bodyParts, m.renderScanProgressLines()...)
+	}
+	body := lipgloss.JoinVertical(lipgloss.Left, bodyParts...)
+	return stylePanelAccent.Render(body)
+}
+
+func (m model) renderScanProgressLines() []string {
+	spin := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
+	spinS := styleProgress.Render(spin)
+	disc := styleProgress.Render(indeterminateBarStyled(m.spinnerFrame, discoveryBarWidth))
+	line1 := fmt.Sprintf("%s scanning %s", spinS, styleDetailValue.Render(truncatePath(m.root, m.width-20)))
+	line2 := fmt.Sprintf("discovery %s %d dirs · found %d repos",
+		disc, m.dirsScanned, m.reposDiscovered)
+	lines := []string{line1, line2}
+	if m.reposDiscovered > 0 {
+		sizeBar := styleProgress.Render(ratioBarStyled(m.reposSized, m.reposDiscovered, sizingBarWidth))
+		lines = append(lines, fmt.Sprintf("sizing    %s %d/%d", sizeBar, m.reposSized, m.reposDiscovered))
+	}
+	return lines
 }
 
 func (m model) renderStatus() string {
 	if m.loading {
-		spin := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-		spinS := styleProgress.Render(spin)
-		disc := styleProgress.Render(indeterminateBarStyled(m.spinnerFrame, discoveryBarWidth))
-		line1 := fmt.Sprintf("%s scanning %s", spinS, styleDetailValue.Render(truncatePath(m.root, m.width-20)))
-		line2 := fmt.Sprintf("discovery %s %d dirs · found %d repos",
-			disc, m.dirsScanned, m.reposDiscovered)
-		var line3 string
-		if m.reposDiscovered > 0 {
-			sizeBar := styleProgress.Render(ratioBarStyled(m.reposSized, m.reposDiscovered, sizingBarWidth))
-			line3 = fmt.Sprintf("sizing    %s %d/%d", sizeBar, m.reposSized, m.reposDiscovered)
-		}
-		return stylePanelAccent.Render(lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3))
+		return ""
 	}
 	if m.reposDiscovered > 0 && m.reposSized < m.reposDiscovered {
 		sizeBar := styleProgress.Render(ratioBarStyled(m.reposSized, m.reposDiscovered, sizingBarWidth))
@@ -85,25 +93,36 @@ func (m model) renderFilterBar() string {
 	}
 	row := lipgloss.JoinHorizontal(lipgloss.Top, chips...)
 	keys := styleKeyHint.Render("keys ") +
-		styleKey.Render("?") + styleKeyHint.Render(" help ") +
-		styleKey.Render("/") + styleKeyHint.Render(" find ") +
-		styleKey.Render("w") + styleKeyHint.Render(" root ") +
-		styleKey.Render("r") + styleKeyHint.Render(" scan ") +
-		styleKey.Render("x") + styleKeyHint.Render(" clean ") +
-		styleKey.Render("[") + styleKey.Render("]") + styleKeyHint.Render(" page ") +
-		styleKey.Render("q") + styleKeyHint.Render(" quit")
+		keyLegend("?", "help") +
+		keyLegend("/", "find") +
+		keyLegend("f", "filter") +
+		keyLegend("w", "root") +
+		keyLegend("r", "scan") +
+		keyLegend("x", "clean") +
+		keyLegend("[ ]", "page") +
+		keyLegend("q", "quit")
 	return lipgloss.JoinVertical(lipgloss.Left, row, keys)
 }
 
-func (m model) tableRepoWidth() int {
-	repoW := 28
-	if m.width > 100 {
-		repoW = m.width - 40
+func (m model) tableLayoutWidth() int {
+	if m.width > maxTableWidth {
+		return maxTableWidth
 	}
+	return m.width
+}
+
+func (m model) tableRepoWidth() int {
+	repoW := m.tableRepoWidthFor(m.tableLayoutWidth())
+	if repoW > maxRepoColWidth {
+		return maxRepoColWidth
+	}
+	return repoW
+}
+
+func (m model) tableRepoWidthFor(contentW int) int {
+	repoW := contentW - colMarker - colSize - colIdle - colMgr - 4
 	if m.showGitContext {
-		repoW -= colMarker + colBranch + colDirty + colSize + colIdle + colMgr + 6
-	} else {
-		repoW -= colMarker + colSize + colIdle + colMgr + 4
+		repoW -= colBranch + colDirty + 2
 	}
 	if repoW < 16 {
 		repoW = 16
@@ -111,8 +130,19 @@ func (m model) tableRepoWidth() int {
 	return repoW
 }
 
+func (m model) tablePanelWidth() int {
+	w := colMarker + colSize + colIdle + colMgr + 4 + m.tableRepoWidth()
+	if m.showGitContext {
+		w += colBranch + colDirty + 2
+	}
+	return w + 4 // border + horizontal padding
+}
+
 func (m model) renderTable(filtered []scanner.Candidate) string {
 	if len(filtered) == 0 {
+		if m.loading {
+			return styleStatLabel.Render("◌ building repo list…")
+		}
 		return stylePanel.Render(m.renderEmptyListMessage())
 	}
 
@@ -135,7 +165,7 @@ func (m model) renderTable(filtered []scanner.Candidate) string {
 	}
 
 	body := strings.Join(append([]string{header}, rows...), "\n")
-	panel := stylePanel.Render(body)
+	panel := stylePanel.Width(m.tablePanelWidth()).Render(body)
 	if len(filtered) > pageSize {
 		end := min(pageStart+pageSize, len(filtered))
 		pager := styleStatLabel.Render(fmt.Sprintf("  showing %d–%d of %d", pageStart+1, end, len(filtered)))
@@ -145,10 +175,11 @@ func (m model) renderTable(filtered []scanner.Candidate) string {
 }
 
 func (m model) renderSelectionDetail(row scanner.Candidate) string {
+	pathW := max(20, m.width-8)
 	title := styleSubtitle.Render("selected")
 	lines := []string{
 		lipgloss.JoinHorizontal(lipgloss.Top,
-			styleDetailLabel.Render("repo "), styleDetailValue.Render(truncatePath(row.RepoPath, m.width-8))),
+			styleDetailLabel.Render("repo "), styleDetailValue.Render(truncatePath(row.RepoPath, pathW))),
 		lipgloss.JoinHorizontal(lipgloss.Top,
 			styleDetailLabel.Render("manager "),
 			managerStyle(row.Manager).Render(string(row.Manager)),
@@ -162,7 +193,7 @@ func (m model) renderSelectionDetail(row scanner.Candidate) string {
 			styleStatReclaim.Render(formatBytes(row.Bytes)),
 		),
 		styleDetailLabel.Render("restore") + " " +
-			styleDetailValue.Render(fmt.Sprintf("(cd %s && %s)", truncatePath(row.RepoPath, 40), row.ReinstallCommand)),
+			styleDetailValue.Render(fmt.Sprintf("(cd %s && %s)", truncatePath(row.RepoPath, pathW), row.ReinstallCommand)),
 	}
 	if m.showGitContext && row.Git.Branch != "" {
 		lines = append(lines, styleDetailLabel.Render("branch ")+styleDetailValue.Render(row.Git.Branch))
@@ -276,10 +307,10 @@ func indeterminateBarStyled(frame, width int) string {
 	filled := frame % width
 	var b strings.Builder
 	for i := 0; i < width; i++ {
-		switch {
-		case i == filled:
+		switch i {
+		case filled:
 			b.WriteString("█")
-		case i == filled-1 || i == filled+1:
+		case filled - 1, filled + 1:
 			b.WriteString("▓")
 		default:
 			b.WriteString("░")
