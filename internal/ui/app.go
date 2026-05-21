@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/cleanup"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scancache"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scanner"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/view"
 )
@@ -59,6 +60,7 @@ type model struct {
 	assessmentBusy  bool
 	cleanupBusy     bool
 	auditLog        []string
+	fromCache       bool
 }
 
 type scanEvent struct {
@@ -77,7 +79,7 @@ func Run(root string, ignore []string, cfg *config.Config) error {
 }
 
 func newModel(root string, ignore []string, cfg *config.Config) model {
-	return model{
+	m := model{
 		root:            root,
 		ignore:          ignore,
 		cfg:             cfg,
@@ -89,9 +91,30 @@ func newModel(root string, ignore []string, cfg *config.Config) model {
 		scanCh:          make(chan scanEvent, 64),
 		width:           80,
 	}
+	if rows, err := scancache.Load(root, scancache.DefaultTTL); err == nil {
+		m.rows = rows
+		m.loading = false
+		m.fromCache = true
+		m.reposDiscovered = len(rows)
+		m.reposSized = countSizedRows(rows)
+	}
+	return m
+}
+
+func countSizedRows(rows []scanner.Candidate) int {
+	n := 0
+	for _, r := range rows {
+		if r.Bytes > 0 {
+			n++
+		}
+	}
+	return n
 }
 
 func (m model) Init() tea.Cmd {
+	if !m.loading {
+		return tickCmd()
+	}
 	go m.runScan()
 	return tea.Batch(m.waitScan(), tickCmd())
 }
@@ -206,6 +229,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.reposDiscovered = len(m.rows)
 		m.reposSized = m.countSized()
+		_ = scancache.Save(m.root, m.rows)
 		return m, nil
 
 	case tea.KeyMsg:
@@ -321,6 +345,10 @@ func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
 		if m.selected > 0 {
 			m.selected--
 		}
+	case "]":
+		m.selected = pageJumpIndex(m.selected, len(filtered), pageSize)
+	case "[":
+		m.selected = pageJumpIndex(m.selected, len(filtered), -pageSize)
 	}
 	m.clampSelection(len(m.filtered()))
 	return false, cmd
@@ -328,6 +356,7 @@ func (m *model) handleKey(msg tea.KeyMsg) (quit bool, cmd tea.Cmd) {
 
 func (m *model) startRescan() tea.Cmd {
 	m.loading = true
+	m.fromCache = false
 	m.rows = nil
 	m.dirsScanned = 0
 	m.reposDiscovered = 0

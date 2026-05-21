@@ -53,6 +53,14 @@ func (m model) renderStatus() string {
 		sizeBar := styleProgress.Render(ratioBarStyled(m.reposSized, m.reposDiscovered, sizingBarWidth))
 		return styleStatLabel.Render(fmt.Sprintf("sizing %s %d/%d", sizeBar, m.reposSized, m.reposDiscovered))
 	}
+	if m.fromCache {
+		return lipgloss.JoinHorizontal(lipgloss.Top,
+			styleStatLabel.Render(fmt.Sprintf("loaded from scan cache · %d repos · ", len(m.rows))),
+			styleKeyHint.Render("press "),
+			styleKey.Render("r"),
+			styleKeyHint.Render(" for full scan"),
+		)
+	}
 	return styleStatLabel.Render(fmt.Sprintf(
 		"scan complete · %d dirs walked · %d repos with node_modules",
 		m.dirsScanned, len(m.rows),
@@ -82,6 +90,7 @@ func (m model) renderFilterBar() string {
 		styleKey.Render("w") + styleKeyHint.Render(" root ") +
 		styleKey.Render("r") + styleKeyHint.Render(" scan ") +
 		styleKey.Render("x") + styleKeyHint.Render(" clean ") +
+		styleKey.Render("[") + styleKey.Render("]") + styleKeyHint.Render(" page ") +
 		styleKey.Render("q") + styleKeyHint.Render(" quit")
 	return lipgloss.JoinVertical(lipgloss.Left, row, keys)
 }
