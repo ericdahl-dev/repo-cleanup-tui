@@ -16,13 +16,19 @@ Find `node_modules` in git repos, sort by reclaimable size, filter by inactivity
 brew install ericdahl-dev/tap/repo-cleanup-tui
 ```
 
-Requires a tagged release (see [Releases](https://github.com/ericdahl-dev/repo-cleanup-tui/releases)). The formula is published to [ericdahl-dev/homebrew-tap](https://github.com/ericdahl-dev/homebrew-tap) by GoReleaser on each `v*` tag.
+Formula updates on each `v*` tag via GoReleaser ([homebrew-tap](https://github.com/ericdahl-dev/homebrew-tap)).
 
 ### Go
+
+Requires [Go 1.24+](https://go.dev/dl/). If your installed `go` is older, the toolchain will auto-download a newer one (that message is normal).
 
 ```bash
 go install github.com/ericdahl-dev/repo-cleanup-tui@latest
 ```
+
+Ensure `$(go env GOPATH)/bin` is on your `PATH` (e.g. `~/go/bin`).
+
+Prefer `@latest` or `v0.1.2+`. Do not use `v0.1.0` for `go install` — that tag was published while the repo was private and remains broken in the public Go module proxy.
 
 ### From source
 
@@ -79,8 +85,8 @@ golangci-lint run   # optional; matches CI
 Tag a version to build cross-platform archives, checksums, GitHub release assets, and update the Homebrew formula:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.1.2
+git push origin v0.1.2
 ```
 
 The [release workflow](.github/workflows/release.yml) runs GoReleaser. Set repository secret `HOMEBREW_TAP_GITHUB_TOKEN` (PAT with push access to `ericdahl-dev/homebrew-tap`) so the tap formula updates automatically.
