@@ -28,6 +28,10 @@ _Avoid_: reinstall script, install hint
 UI filter that hides Candidates without a lockfile (cleanup not considered safe).
 _Avoid_: lockfile mode, k toggle name in UI
 
+**Dirty-only filter**
+**Browse view** filter that hides **Candidates** whose working tree is clean (shows only repos with uncommitted or unstaged changes); does not gate **Cleanup**. Off by default when **Browse view** opens.
+_Avoid_: dirty-only mode, d toggle name in UI
+
 **Cleanup**
 Deleting a Candidate's `node_modules` after gates pass, with a logged **Restore command**.
 _Avoid_: purge, wipe, uninstall
@@ -69,8 +73,12 @@ Toggleable keybinding reference (`?`), separate from **Browse view** and **Clean
 _Avoid_: help screen, docs mode
 
 **Git context**
-Per-**Candidate** branch name, dirty working tree, and ahead/behind vs upstream (read from the local repo via embedded git library, not GitHub API).
+Per-**Candidate** branch name, whether the working tree is **dirty**, and ahead/behind vs upstream (read from the local repo via embedded git library, not GitHub API).
 _Avoid_: git status, repo status, shell git
+
+**Dirty**
+Working tree has uncommitted or unstaged changes; does not include unpushed commits or ahead/behind alone.
+_Avoid_: modified, WIP (without defining worktree), unpushed
 
 ## Relationships
 
@@ -78,6 +86,8 @@ _Avoid_: git status, repo status, shell git
 - Each **Candidate** has exactly one **Manager**, one **Reclaimable footprint**, and one **Restore command**
 - **Cleanup** applies to at most one **Candidate** at a time and requires passing safety gates and **Confirm token**
 - **Dry-run** is optional within **Cleanup preview** before real **Cleanup**
+- **Dirty-only filter** applies only in **Browse view**; **Cleanup** ignores **Dirty**
+- **Dirty-only filter** does not toggle git column visibility (branch/dirty columns remain user-controlled)
 
 ## Example dialogue
 
