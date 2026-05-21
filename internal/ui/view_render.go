@@ -138,7 +138,7 @@ func (m model) renderTableAt(filtered []scanner.Candidate, contentW int) string 
 	}
 
 	body := strings.Join(append([]string{header}, rows...), "\n")
-	panel := stylePanel.Render(body)
+	panel := tablePanelStyle(contentW).Render(body)
 	if len(filtered) > pageSize {
 		end := min(pageStart+pageSize, len(filtered))
 		pager := styleStatLabel.Render(fmt.Sprintf("  showing %d–%d of %d", pageStart+1, end, len(filtered)))
@@ -192,10 +192,7 @@ func (m model) renderSelectionDetail(row scanner.Candidate, sidebarW int) string
 		lines = append(lines, styleKeyHint.Render("press x → preview cleanup"))
 	}
 	body := lipgloss.JoinVertical(lipgloss.Left, append([]string{title}, lines...)...)
-	if sidebarW > 0 {
-		return lipgloss.NewStyle().Width(sidebarW).Render(stylePanelAccent.Render(body))
-	}
-	return stylePanelAccent.Render(body)
+	return detailPanelStyle(sidebarW).Render(body)
 }
 
 func lockfileStyle(ok bool) lipgloss.Style {

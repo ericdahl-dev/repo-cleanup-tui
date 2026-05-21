@@ -6,7 +6,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/cleanup"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scancache"
@@ -436,7 +435,7 @@ func (m model) View() string {
 	if cols, ok := m.wideColumns(len(filtered)); ok && len(filtered) > 0 && m.selected < len(filtered) {
 		tableBlock := m.renderTableAt(filtered, cols.tableW)
 		detailBlock := m.renderSelectionDetail(filtered[m.selected], cols.detailW)
-		parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Top, tableBlock, detailBlock))
+		parts = append(parts, joinWideTableDetail(tableBlock, detailBlock, cols.detailW))
 	} else {
 		parts = append(parts, m.renderTable(filtered))
 		if detail != "" {
