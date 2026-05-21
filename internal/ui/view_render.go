@@ -96,14 +96,13 @@ func (m model) renderFilterBar() string {
 }
 
 func (m model) tableRepoWidth() int {
-	repoW := 28
-	if m.width > 100 {
-		repoW = m.width - 40
-	}
+	return m.tableRepoWidthFor(m.width)
+}
+
+func (m model) tableRepoWidthFor(contentW int) int {
+	repoW := contentW - colMarker - colSize - colIdle - colMgr - 4
 	if m.showGitContext {
-		repoW -= colMarker + colBranch + colDirty + colSize + colIdle + colMgr + 6
-	} else {
-		repoW -= colMarker + colSize + colIdle + colMgr + 4
+		repoW -= colBranch + colDirty + 2
 	}
 	if repoW < 16 {
 		repoW = 16
@@ -112,13 +111,17 @@ func (m model) tableRepoWidth() int {
 }
 
 func (m model) renderTable(filtered []scanner.Candidate) string {
+	return m.renderTableAt(filtered, m.width)
+}
+
+func (m model) renderTableAt(filtered []scanner.Candidate, contentW int) string {
 	if len(filtered) == 0 {
 		return stylePanel.Render(m.renderEmptyListMessage())
 	}
 
 	pageStart := pageWindowStart(m.selected, len(filtered))
 	visible := filtered[pageStart:min(pageStart+pageSize, len(filtered))]
-	repoW := m.tableRepoWidth()
+	repoW := m.tableRepoWidthFor(contentW)
 
 	header := styleTableHeader.Render(m.formatTableHeader(repoW))
 
@@ -144,42 +147,55 @@ func (m model) renderTable(filtered []scanner.Candidate) string {
 	return panel
 }
 
-func (m model) detailPathWidth() int {
-	if m.width >= wideLayoutMinWidth {
-		return detailPanelWidth - 4
+func (m model) renderSelectionDetail(row scanner.Candidate, sidebarW int) string {
+	pathW := max(12, sidebarW-6)
+	if sidebarW <= 0 {
+		pathW = max(20, m.width-8)
 	}
-	return max(20, m.width-8)
-}
-
-func (m model) renderSelectionDetail(row scanner.Candidate) string {
-	pathW := m.detailPathWidth()
 	title := styleSubtitle.Render("selected")
 	lines := []string{
 		lipgloss.JoinHorizontal(lipgloss.Top,
 			styleDetailLabel.Render("repo "), styleDetailValue.Render(truncatePath(row.RepoPath, pathW))),
-		lipgloss.JoinHorizontal(lipgloss.Top,
-			styleDetailLabel.Render("manager "),
-			managerStyle(row.Manager).Render(string(row.Manager)),
-			styleDetailLabel.Render(" · lockfile "),
-			lockfileStyle(row.HasLockfile).Render(yesNo(row.HasLockfile)),
-			styleDetailLabel.Render(" · dirty "),
-			dirtyStyle(row.Git.Dirty).Render(yesNo(row.Git.Dirty)),
-		),
+	}
+	if sidebarW > 0 {
+		lines = append(lines,
+			lipgloss.JoinHorizontal(lipgloss.Top,
+				styleDetailLabel.Render("manager "), managerStyle(row.Manager).Render(string(row.Manager))),
+			lipgloss.JoinHorizontal(lipgloss.Top,
+				styleDetailLabel.Render("lockfile "), lockfileStyle(row.HasLockfile).Render(yesNo(row.HasLockfile)),
+				styleDetailLabel.Render("  dirty "), dirtyStyle(row.Git.Dirty).Render(yesNo(row.Git.Dirty))),
+		)
+	} else {
+		lines = append(lines,
+			lipgloss.JoinHorizontal(lipgloss.Top,
+				styleDetailLabel.Render("manager "),
+				managerStyle(row.Manager).Render(string(row.Manager)),
+				styleDetailLabel.Render(" · lockfile "),
+				lockfileStyle(row.HasLockfile).Render(yesNo(row.HasLockfile)),
+				styleDetailLabel.Render(" · dirty "),
+				dirtyStyle(row.Git.Dirty).Render(yesNo(row.Git.Dirty)),
+			),
+		)
+	}
+	lines = append(lines,
 		lipgloss.JoinHorizontal(lipgloss.Top,
 			styleDetailLabel.Render("node_modules "),
 			styleStatReclaim.Render(formatBytes(row.Bytes)),
 		),
-		styleDetailLabel.Render("restore") + " " +
+		styleDetailLabel.Render("restore")+" "+
 			styleDetailValue.Render(fmt.Sprintf("(cd %s && %s)", truncatePath(row.RepoPath, pathW), row.ReinstallCommand)),
-	}
+	)
 	if m.showGitContext && row.Git.Branch != "" {
 		lines = append(lines, styleDetailLabel.Render("branch ")+styleDetailValue.Render(row.Git.Branch))
 	}
 	if m.mode == modeBrowse {
 		lines = append(lines, styleKeyHint.Render("press x → preview cleanup"))
 	}
-	return stylePanelAccent.Render(lipgloss.JoinVertical(lipgloss.Left,
-		append([]string{title}, lines...)...))
+	body := lipgloss.JoinVertical(lipgloss.Left, append([]string{title}, lines...)...)
+	if sidebarW > 0 {
+		return lipgloss.NewStyle().Width(sidebarW).Render(stylePanelAccent.Render(body))
+	}
+	return stylePanelAccent.Render(body)
 }
 
 func lockfileStyle(ok bool) lipgloss.Style {

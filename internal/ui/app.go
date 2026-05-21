@@ -425,34 +425,23 @@ func (m model) View() string {
 	if m.showHelp {
 		parts = append(parts, RenderHelp(m.width))
 	}
-	parts = append(parts, m.renderTable(filtered))
 
 	var detail string
 	if len(filtered) > 0 && m.selected < len(filtered) {
-		detail = m.renderSelectionDetail(filtered[m.selected])
+		detail = m.renderSelectionDetail(filtered[m.selected], 0)
 	} else if m.loading {
 		detail = styleStatLabel.Render("◌ waiting for first match…")
 	}
 
-	wide := m.useWideDetailPanel(len(filtered)) && detail != ""
-	if wide {
-		leftW := m.width - detailPanelWidth - 2
-		if leftW < 40 {
-			leftW = 40
+	if cols, ok := m.wideColumns(len(filtered)); ok && len(filtered) > 0 && m.selected < len(filtered) {
+		tableBlock := m.renderTableAt(filtered, cols.tableW)
+		detailBlock := m.renderSelectionDetail(filtered[m.selected], cols.detailW)
+		parts = append(parts, lipgloss.JoinHorizontal(lipgloss.Top, tableBlock, detailBlock))
+	} else {
+		parts = append(parts, m.renderTable(filtered))
+		if detail != "" {
+			parts = append(parts, detail)
 		}
-		left := lipgloss.NewStyle().Width(leftW).Render(strings.Join(parts, "\n"))
-		out := lipgloss.JoinHorizontal(lipgloss.Top, left, detail)
-		if banner := m.renderModeBanner(); banner != "" {
-			out += "\n" + banner
-		}
-		if audit := m.renderAudit(); audit != "" {
-			out += "\n" + audit
-		}
-		return out
-	}
-
-	if detail != "" {
-		parts = append(parts, detail)
 	}
 	if banner := m.renderModeBanner(); banner != "" {
 		parts = append(parts, banner)
