@@ -2,12 +2,10 @@ package ui
 
 import (
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/cleanup"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scanner"
@@ -383,156 +381,33 @@ func (m *model) clampSelection(n int) {
 }
 
 func (m model) View() string {
-	var b strings.Builder
 	filtered := m.filtered()
-
 	totalReclaim := int64(0)
 	for _, row := range filtered {
 		totalReclaim += row.Bytes
 	}
 
-	titleStyle := lipgloss.NewStyle().Bold(true)
-	b.WriteString(titleStyle.Render("Repo Cleanup TUI (browse)") + "\n")
-	fmt.Fprintf(&b, "Found %d repos | visible %d | reclaimable %s\n",
-		len(m.rows), len(filtered), formatBytes(totalReclaim))
-	fmt.Fprintf(&b, "Workspace: %s | sort: %s | selected %d/%d\n",
-		m.root, m.sortMode, selectionLabel(len(filtered), m.selected), len(filtered))
-
-	if m.loading {
-		spin := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-		fmt.Fprintf(&b, "%s scanning %d dirs in %s\n", spin, m.dirsScanned, m.root)
-		fmt.Fprintf(&b, "Discovery %s %d dirs | repos found %d\n",
-			indeterminateBar(m.spinnerFrame, discoveryBarWidth), m.dirsScanned, m.reposDiscovered)
-	} else {
-		fmt.Fprintf(&b, "Scan complete in %s\n", m.root)
+	parts := []string{
+		m.renderHeader(totalReclaim, len(filtered)),
+		m.renderStatus(),
+		m.renderFilterBar(),
 	}
-
-	if m.reposDiscovered > 0 {
-		fmt.Fprintf(&b, "Sizing %s %d/%d\n",
-			ratioBar(m.reposSized, m.reposDiscovered, sizingBarWidth), m.reposSized, m.reposDiscovered)
-	}
-
-	inactiveLabel := "all"
-	if m.minInactiveDays > 0 {
-		inactiveLabel = fmt.Sprintf(">=%dd", m.minInactiveDays)
-	}
-	b.WriteString("Keys: q quit | ? help | / search | c clear | w workspace | g git | r rescan | x cleanup | j/u move\n")
-	b.WriteString("      s sort | f inactive | k safe | d dirty\n")
-	fmt.Fprintf(&b, "Filters: inactive(%s) safe-only(%s) dirty-only(%s) search(%q)\n",
-		inactiveLabel, onOff(m.showOnlySafe), onOff(m.showOnlyDirty), m.searchQuery)
-
 	if m.showHelp {
-		b.WriteString("\n")
-		b.WriteString(RenderHelp(m.width))
-		b.WriteString("\n")
+		parts = append(parts, RenderHelp(m.width))
 	}
-
-	if m.mode == modeSearch {
-		fmt.Fprintf(&b, "\nSearch: %q (enter apply, esc cancel)\n", m.searchQuery)
-	}
-	if m.mode == modeWorkspace {
-		fmt.Fprintf(&b, "\nWorkspace path: %s (enter save+rescan, esc cancel)\n", m.workspaceInput)
-	}
-
-	if m.showGitContext {
-		b.WriteString("\n      branch | dirty |     size | inactive | repo\n")
-	} else {
-		b.WriteString("\n      size | inactive | repo\n")
-	}
-	pageStart := pageWindowStart(m.selected, len(filtered))
-	visible := filtered[pageStart:min(pageStart+pageSize, len(filtered))]
-	for i, row := range visible {
-		abs := pageStart + i
-		prefix := " "
-		if abs == m.selected {
-			prefix = ">"
-		}
-		rel := row.RepoPath
-		if r, err := filepath.Rel(m.root, row.RepoPath); err == nil && r != "" {
-			rel = r
-		}
-		inactive := "unknown"
-		if row.InactiveDays != nil {
-			inactive = fmt.Sprintf("%dd", *row.InactiveDays)
-		}
-		if m.showGitContext {
-			branch := row.Git.Branch
-			if branch == "" {
-				branch = "-"
-			}
-			fmt.Fprintf(&b, "%s %6s | %5s | %8s | %7s | %s\n",
-				prefix, branch, yesNo(row.Git.Dirty), formatBytes(row.Bytes), inactive, rel)
-		} else {
-			fmt.Fprintf(&b, "%s %8s | %7s | %s\n", prefix, formatBytes(row.Bytes), inactive, rel)
-		}
-	}
-
-	if m.loading && len(filtered) == 0 {
-		b.WriteString("\nScanning… list fills as candidates are sized.\n")
-	} else if !m.loading && len(filtered) == 0 {
-		b.WriteString("\nNo rows match filters.\n")
-	} else if len(filtered) > pageSize {
-		end := min(pageStart+pageSize, len(filtered))
-		fmt.Fprintf(&b, "\nShowing %d-%d of %d\n", pageStart+1, end, len(filtered))
-	}
-
+	parts = append(parts, m.renderTable(filtered))
 	if len(filtered) > 0 && m.selected < len(filtered) {
-		row := filtered[m.selected]
-		b.WriteString("\nSelected\n")
-		fmt.Fprintf(&b, "  Repo: %s\n", row.RepoPath)
-		fmt.Fprintf(&b, "  Manager: %s | lockfile: %s | dirty: %s",
-			row.Manager, yesNo(row.HasLockfile), yesNo(row.Git.Dirty))
-		if m.showGitContext {
-			fmt.Fprintf(&b, " | branch: %s", row.Git.Branch)
-		}
-		b.WriteString("\n")
-		fmt.Fprintf(&b, "  node_modules: %s\n", row.NodeModulesPath)
-		fmt.Fprintf(&b, "  Restore: (cd %s && %s)\n", row.RepoPath, row.ReinstallCommand)
-		if m.mode == modeBrowse {
-			b.WriteString("  Next: press x for preview, then p (dry-run) or y (confirm).\n")
-		}
+		parts = append(parts, m.renderSelectionDetail(filtered[m.selected]))
 	} else if m.loading {
-		b.WriteString("\nWaiting for first match…\n")
+		parts = append(parts, styleStatLabel.Render("◌ waiting for first match…"))
 	}
-
-	if m.mode == modePreview && len(filtered) > 0 && m.selected < len(filtered) {
-		row := filtered[m.selected]
-		b.WriteString("\nPreview (dry-run)\n")
-		fmt.Fprintf(&b, "  Target: %s\n", row.NodeModulesPath)
-		if m.assessmentBusy {
-			b.WriteString("  Assessing risk…\n")
-		} else if m.assessment != nil {
-			fmt.Fprintf(&b, "  Risk: %s | confidence: %s | guards: %s\n",
-				m.assessment.RiskLevel, m.assessment.Confidence,
-				assessmentGuardLabel(m.assessment))
-			if len(m.assessment.Warnings) > 0 {
-				fmt.Fprintf(&b, "  Warnings: %s\n", strings.Join(m.assessment.Warnings, ", "))
-			}
-		}
-		b.WriteString("  Keys: p run dry-run | y continue to confirm | n cancel | esc back\n")
+	if banner := m.renderModeBanner(); banner != "" {
+		parts = append(parts, banner)
 	}
-
-	if m.mode == modeConfirm && len(filtered) > 0 && m.selected < len(filtered) {
-		row := filtered[m.selected]
-		b.WriteString("\nConfirm cleanup: remove node_modules only (repository is not deleted).\n")
-		fmt.Fprintf(&b, "  Action: delete %s\n", row.NodeModulesPath)
-		b.WriteString("  Type the confirmation token exactly, then press Enter.\n")
-		fmt.Fprintf(&b, "  Token: %s\n", cleanup.BuildConfirmToken(row))
-		fmt.Fprintf(&b, "  Input: %s\n", m.confirmInput)
-		if m.cleanupBusy {
-			spin := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-			fmt.Fprintf(&b, "  %s deleting node_modules…\n", spin)
-		}
+	if audit := m.renderAudit(); audit != "" {
+		parts = append(parts, audit)
 	}
-
-	if len(m.auditLog) > 0 {
-		b.WriteString("\nAudit log (also on stderr)\n")
-		for _, line := range m.auditLog {
-			fmt.Fprintf(&b, "  %s\n", line)
-		}
-	}
-
-	return b.String()
+	return strings.Join(parts, "\n")
 }
 
 func assessmentGuardLabel(a *cleanup.Assessment) string {
@@ -571,13 +446,6 @@ func formatBytes(bytes int64) string {
 	}
 	const mb = 1024 * 1024
 	return fmt.Sprintf("%d MB", bytes/mb)
-}
-
-func onOff(v bool) string {
-	if v {
-		return "on"
-	}
-	return "off"
 }
 
 func yesNo(v bool) string {

@@ -4,13 +4,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/lipgloss"
 )
 
-var helpStyle = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder()).
-	Padding(1, 2).
-	BorderForeground(lipgloss.Color("212"))
+// help uses styleHelpBorder from styles.go (amber ops-console frame).
 
 const helpMarkdown = `# repo-cleanup-tui · keybindings
 
@@ -71,13 +67,13 @@ func RenderHelp(width int) string {
 		glamour.WithStandardStyle("dark"),
 	)
 	if err != nil {
-		return helpStyle.Render(fallbackHelpText())
+		return styleHelpBorder.Render(fallbackHelpText())
 	}
 	out, err := r.Render(helpMarkdown)
 	if err != nil {
-		return helpStyle.Render(fallbackHelpText())
+		return styleHelpBorder.Render(fallbackHelpText())
 	}
-	return helpStyle.Render(strings.TrimRight(out, "\n"))
+	return styleHelpBorder.Render(strings.TrimRight(out, "\n"))
 }
 
 func fallbackHelpText() string {

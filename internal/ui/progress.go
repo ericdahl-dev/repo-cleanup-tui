@@ -5,7 +5,7 @@ const (
 	sizingBarWidth    = 24
 )
 
-var spinnerFrames = []string{"|", "/", "-", "\\"}
+var spinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 func indeterminateBar(frame, width int) string {
 	if width <= 0 {
