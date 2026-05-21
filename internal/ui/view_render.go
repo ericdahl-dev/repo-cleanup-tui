@@ -95,6 +95,22 @@ func (m model) renderFilterBar() string {
 	return lipgloss.JoinVertical(lipgloss.Left, row, keys)
 }
 
+func (m model) tableRepoWidth() int {
+	repoW := 28
+	if m.width > 100 {
+		repoW = m.width - 40
+	}
+	if m.showGitContext {
+		repoW -= colMarker + colBranch + colDirty + colSize + colIdle + colMgr + 6
+	} else {
+		repoW -= colMarker + colSize + colIdle + colMgr + 4
+	}
+	if repoW < 16 {
+		repoW = 16
+	}
+	return repoW
+}
+
 func (m model) renderTable(filtered []scanner.Candidate) string {
 	if len(filtered) == 0 {
 		return stylePanel.Render(m.renderEmptyListMessage())
@@ -102,68 +118,15 @@ func (m model) renderTable(filtered []scanner.Candidate) string {
 
 	pageStart := pageWindowStart(m.selected, len(filtered))
 	visible := filtered[pageStart:min(pageStart+pageSize, len(filtered))]
+	repoW := m.tableRepoWidth()
 
-	repoW := 28
-	if m.width > 100 {
-		repoW = m.width - 58
-	}
-	if m.showGitContext && repoW > 20 {
-		repoW -= 18
-	}
-	if repoW < 12 {
-		repoW = 12
-	}
-
-	var header string
-	if m.showGitContext {
-		header = styleTableHeader.Render(
-			fmt.Sprintf("%-2s %-10s %-5s %8s %7s %-8s %s",
-				"", "branch", "dirty", "size", "idle", "mgr", "repo"))
-	} else {
-		header = styleTableHeader.Render(
-			fmt.Sprintf("%-2s %8s %7s %-8s %s", "", "size", "idle", "mgr", "repo"))
-	}
+	header := styleTableHeader.Render(m.formatTableHeader(repoW))
 
 	var rows []string
 	for i, row := range visible {
 		abs := pageStart + i
 		selected := abs == m.selected
-		rel := row.RepoPath
-		if r, err := filepath.Rel(m.root, row.RepoPath); err == nil && r != "" {
-			rel = r
-		}
-		rel = truncatePath(rel, repoW)
-		inactive := styleStatLabel.Render("?")
-		if row.InactiveDays != nil {
-			inactive = styleStatValue.Render(fmt.Sprintf("%dd", *row.InactiveDays))
-		}
-		size := styleStatReclaim.Render(formatBytes(row.Bytes))
-		if row.Bytes == 0 {
-			size = styleStatLabel.Render("…")
-		}
-		mgr := managerStyle(row.Manager).Render(string(row.Manager))
-		marker := " "
-		if selected {
-			marker = styleRowMarkerSel.Render("▸")
-		} else {
-			marker = styleRowMarker.Render(" ")
-		}
-		var line string
-		if m.showGitContext {
-			branch := row.Git.Branch
-			if branch == "" {
-				branch = "-"
-			}
-			branch = truncatePath(branch, 10)
-			dirty := styleStatLabel.Render("no")
-			if row.Git.Dirty {
-				dirty = styleChipWarn.Render("yes")
-			}
-			line = fmt.Sprintf("%s %-10s %-5s %8s %7s %-8s %s",
-				marker, branch, dirty, size, inactive, mgr, rel)
-		} else {
-			line = fmt.Sprintf("%s %8s %7s %-8s %s", marker, size, inactive, mgr, rel)
-		}
+		line := m.formatTableRow(row, repoW, selected)
 		if selected {
 			rows = append(rows, styleRowSel.Render(line))
 		} else {
@@ -422,4 +385,78 @@ func parentWorkspaceHint(root string) string {
 func pathExists(p string) bool {
 	_, err := os.Stat(p)
 	return err == nil
+}
+
+func (m model) formatTableHeader(repoW int) string {
+	if m.showGitContext {
+		return joinCells(
+			padRight("", colMarker),
+			padRight("branch", colBranch),
+			padRight("dirty", colDirty),
+			padRight("size", colSize),
+			padRight("idle", colIdle),
+			padRight("mgr", colMgr),
+			padRight("repo", repoW),
+		)
+	}
+	return joinCells(
+		padRight("", colMarker),
+		padRight("size", colSize),
+		padRight("idle", colIdle),
+		padRight("mgr", colMgr),
+		padRight("repo", repoW),
+	)
+}
+
+func (m model) formatTableRow(row scanner.Candidate, repoW int, selected bool) string {
+	rel := row.RepoPath
+	if r, err := filepath.Rel(m.root, row.RepoPath); err == nil && r != "" {
+		rel = r
+	}
+	rel = truncatePath(rel, repoW)
+
+	markerPlain := " "
+	if selected {
+		markerPlain = "▸"
+	}
+	marker := styleRowMarker.Render(padRight(markerPlain, colMarker))
+	if selected {
+		marker = styleRowMarkerSel.Render(padRight(markerPlain, colMarker))
+	}
+
+	sizePlain := formatBytes(row.Bytes)
+	if row.Bytes == 0 {
+		sizePlain = "…"
+	}
+	sizeCell := styleStatReclaim.Render(padRight(sizePlain, colSize))
+	if row.Bytes == 0 {
+		sizeCell = styleStatLabel.Render(padRight(sizePlain, colSize))
+	}
+
+	idlePlain := "?"
+	if row.InactiveDays != nil {
+		idlePlain = fmt.Sprintf("%dd", *row.InactiveDays)
+	}
+	idleCell := styleStatValue.Render(padRight(idlePlain, colIdle))
+
+	mgrCell := managerStyle(row.Manager).Render(padRight(string(row.Manager), colMgr))
+	repoCell := styleDetailValue.Render(padRight(rel, repoW))
+
+	if m.showGitContext {
+		branch := row.Git.Branch
+		if branch == "" {
+			branch = "-"
+		}
+		branch = truncatePath(branch, colBranch)
+		branchCell := styleStatValue.Render(padRight(branch, colBranch))
+
+		dirtyPlain := "no"
+		dirtyCell := styleStatLabel.Render(padRight(dirtyPlain, colDirty))
+		if row.Git.Dirty {
+			dirtyPlain = "yes"
+			dirtyCell = styleChipWarn.Render(padRight(dirtyPlain, colDirty))
+		}
+		return joinCells(marker, branchCell, dirtyCell, sizeCell, idleCell, mgrCell, repoCell)
+	}
+	return joinCells(marker, sizeCell, idleCell, mgrCell, repoCell)
 }
