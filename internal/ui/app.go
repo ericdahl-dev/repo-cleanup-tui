@@ -416,11 +416,11 @@ func (m model) View() string {
 		totalReclaim += row.Bytes
 	}
 
-	parts := []string{
-		m.renderHeader(totalReclaim, len(filtered)),
-		m.renderStatus(),
-		m.renderFilterBar(),
+	parts := []string{m.renderHeader(totalReclaim, len(filtered))}
+	if status := m.renderStatus(); status != "" {
+		parts = append(parts, status)
 	}
+	parts = append(parts, m.renderFilterBar())
 	if m.showHelp {
 		parts = append(parts, RenderHelp(m.width))
 	}

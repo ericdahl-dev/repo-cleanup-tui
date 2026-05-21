@@ -30,24 +30,32 @@ func (m model) renderHeader(totalReclaim int64, visible int) string {
 		styleStatLabel.Render("  cursor "),
 		styleStatValue.Render(fmt.Sprintf("%d/%d", selectionLabel(visible, m.selected), visible)),
 	)
-	body := lipgloss.JoinVertical(lipgloss.Left, title, sub, line1, line2)
-	return stylePanel.Render(body)
+	bodyParts := []string{title, sub, line1, line2}
+	if m.loading {
+		bodyParts = append(bodyParts, m.renderScanProgressLines()...)
+	}
+	body := lipgloss.JoinVertical(lipgloss.Left, bodyParts...)
+	return stylePanelAccent.Render(body)
+}
+
+func (m model) renderScanProgressLines() []string {
+	spin := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
+	spinS := styleProgress.Render(spin)
+	disc := styleProgress.Render(indeterminateBarStyled(m.spinnerFrame, discoveryBarWidth))
+	line1 := fmt.Sprintf("%s scanning %s", spinS, styleDetailValue.Render(truncatePath(m.root, m.width-20)))
+	line2 := fmt.Sprintf("discovery %s %d dirs · found %d repos",
+		disc, m.dirsScanned, m.reposDiscovered)
+	lines := []string{line1, line2}
+	if m.reposDiscovered > 0 {
+		sizeBar := styleProgress.Render(ratioBarStyled(m.reposSized, m.reposDiscovered, sizingBarWidth))
+		lines = append(lines, fmt.Sprintf("sizing    %s %d/%d", sizeBar, m.reposSized, m.reposDiscovered))
+	}
+	return lines
 }
 
 func (m model) renderStatus() string {
 	if m.loading {
-		spin := spinnerFrames[m.spinnerFrame%len(spinnerFrames)]
-		spinS := styleProgress.Render(spin)
-		disc := styleProgress.Render(indeterminateBarStyled(m.spinnerFrame, discoveryBarWidth))
-		line1 := fmt.Sprintf("%s scanning %s", spinS, styleDetailValue.Render(truncatePath(m.root, m.width-20)))
-		line2 := fmt.Sprintf("discovery %s %d dirs · found %d repos",
-			disc, m.dirsScanned, m.reposDiscovered)
-		var line3 string
-		if m.reposDiscovered > 0 {
-			sizeBar := styleProgress.Render(ratioBarStyled(m.reposSized, m.reposDiscovered, sizingBarWidth))
-			line3 = fmt.Sprintf("sizing    %s %d/%d", sizeBar, m.reposSized, m.reposDiscovered)
-		}
-		return stylePanelAccent.Render(lipgloss.JoinVertical(lipgloss.Left, line1, line2, line3))
+		return ""
 	}
 	if m.reposDiscovered > 0 && m.reposSized < m.reposDiscovered {
 		sizeBar := styleProgress.Render(ratioBarStyled(m.reposSized, m.reposDiscovered, sizingBarWidth))
@@ -112,6 +120,9 @@ func (m model) tableRepoWidthFor(contentW int) int {
 
 func (m model) renderTable(filtered []scanner.Candidate) string {
 	if len(filtered) == 0 {
+		if m.loading {
+			return styleStatLabel.Render("◌ building repo list…")
+		}
 		return stylePanel.Render(m.renderEmptyListMessage())
 	}
 
