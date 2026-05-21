@@ -77,8 +77,6 @@ On cold start the TUI loads a local scan cache (`.repo-cleanup-tui-scan-cache.js
 | `x` | Cleanup preview → `p` dry-run, `y` confirm, type token + Enter |
 | `q` / `esc` | Quit or back from sub-modes |
 
-Wide terminals (≥100 columns): the selected-repo detail panel moves to the right.
-
 ## Development
 
 ```bash

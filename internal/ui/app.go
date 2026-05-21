@@ -425,22 +425,11 @@ func (m model) View() string {
 		parts = append(parts, RenderHelp(m.width))
 	}
 
-	var detail string
+	parts = append(parts, m.renderTable(filtered))
 	if len(filtered) > 0 && m.selected < len(filtered) {
-		detail = m.renderSelectionDetail(filtered[m.selected], 0)
+		parts = append(parts, m.renderSelectionDetail(filtered[m.selected]))
 	} else if m.loading {
-		detail = styleStatLabel.Render("◌ waiting for first match…")
-	}
-
-	if cols, ok := m.wideColumns(len(filtered)); ok && len(filtered) > 0 && m.selected < len(filtered) {
-		tableBlock := m.renderTableAt(filtered, cols.tableW)
-		detailBlock := m.renderSelectionDetail(filtered[m.selected], cols.detailW)
-		parts = append(parts, joinWideTableDetail(tableBlock, detailBlock, cols.detailW))
-	} else {
-		parts = append(parts, m.renderTable(filtered))
-		if detail != "" {
-			parts = append(parts, detail)
-		}
+		parts = append(parts, styleStatLabel.Render("◌ waiting for first match…"))
 	}
 	if banner := m.renderModeBanner(); banner != "" {
 		parts = append(parts, banner)

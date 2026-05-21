@@ -111,17 +111,13 @@ func (m model) tableRepoWidthFor(contentW int) int {
 }
 
 func (m model) renderTable(filtered []scanner.Candidate) string {
-	return m.renderTableAt(filtered, m.width)
-}
-
-func (m model) renderTableAt(filtered []scanner.Candidate, contentW int) string {
 	if len(filtered) == 0 {
 		return stylePanel.Render(m.renderEmptyListMessage())
 	}
 
 	pageStart := pageWindowStart(m.selected, len(filtered))
 	visible := filtered[pageStart:min(pageStart+pageSize, len(filtered))]
-	repoW := m.tableRepoWidthFor(contentW)
+	repoW := m.tableRepoWidth()
 
 	header := styleTableHeader.Render(m.formatTableHeader(repoW))
 
@@ -138,7 +134,7 @@ func (m model) renderTableAt(filtered []scanner.Candidate, contentW int) string 
 	}
 
 	body := strings.Join(append([]string{header}, rows...), "\n")
-	panel := tablePanelStyle(contentW).Render(body)
+	panel := stylePanel.Render(body)
 	if len(filtered) > pageSize {
 		end := min(pageStart+pageSize, len(filtered))
 		pager := styleStatLabel.Render(fmt.Sprintf("  showing %d–%d of %d", pageStart+1, end, len(filtered)))
@@ -147,52 +143,35 @@ func (m model) renderTableAt(filtered []scanner.Candidate, contentW int) string 
 	return panel
 }
 
-func (m model) renderSelectionDetail(row scanner.Candidate, sidebarW int) string {
-	pathW := max(12, sidebarW-6)
-	if sidebarW <= 0 {
-		pathW = max(20, m.width-8)
-	}
+func (m model) renderSelectionDetail(row scanner.Candidate) string {
+	pathW := max(20, m.width-8)
 	title := styleSubtitle.Render("selected")
 	lines := []string{
 		lipgloss.JoinHorizontal(lipgloss.Top,
 			styleDetailLabel.Render("repo "), styleDetailValue.Render(truncatePath(row.RepoPath, pathW))),
-	}
-	if sidebarW > 0 {
-		lines = append(lines,
-			lipgloss.JoinHorizontal(lipgloss.Top,
-				styleDetailLabel.Render("manager "), managerStyle(row.Manager).Render(string(row.Manager))),
-			lipgloss.JoinHorizontal(lipgloss.Top,
-				styleDetailLabel.Render("lockfile "), lockfileStyle(row.HasLockfile).Render(yesNo(row.HasLockfile)),
-				styleDetailLabel.Render("  dirty "), dirtyStyle(row.Git.Dirty).Render(yesNo(row.Git.Dirty))),
-		)
-	} else {
-		lines = append(lines,
-			lipgloss.JoinHorizontal(lipgloss.Top,
-				styleDetailLabel.Render("manager "),
-				managerStyle(row.Manager).Render(string(row.Manager)),
-				styleDetailLabel.Render(" · lockfile "),
-				lockfileStyle(row.HasLockfile).Render(yesNo(row.HasLockfile)),
-				styleDetailLabel.Render(" · dirty "),
-				dirtyStyle(row.Git.Dirty).Render(yesNo(row.Git.Dirty)),
-			),
-		)
-	}
-	lines = append(lines,
+		lipgloss.JoinHorizontal(lipgloss.Top,
+			styleDetailLabel.Render("manager "),
+			managerStyle(row.Manager).Render(string(row.Manager)),
+			styleDetailLabel.Render(" · lockfile "),
+			lockfileStyle(row.HasLockfile).Render(yesNo(row.HasLockfile)),
+			styleDetailLabel.Render(" · dirty "),
+			dirtyStyle(row.Git.Dirty).Render(yesNo(row.Git.Dirty)),
+		),
 		lipgloss.JoinHorizontal(lipgloss.Top,
 			styleDetailLabel.Render("node_modules "),
 			styleStatReclaim.Render(formatBytes(row.Bytes)),
 		),
-		styleDetailLabel.Render("restore")+" "+
+		styleDetailLabel.Render("restore") + " " +
 			styleDetailValue.Render(fmt.Sprintf("(cd %s && %s)", truncatePath(row.RepoPath, pathW), row.ReinstallCommand)),
-	)
+	}
 	if m.showGitContext && row.Git.Branch != "" {
 		lines = append(lines, styleDetailLabel.Render("branch ")+styleDetailValue.Render(row.Git.Branch))
 	}
 	if m.mode == modeBrowse {
 		lines = append(lines, styleKeyHint.Render("press x → preview cleanup"))
 	}
-	body := lipgloss.JoinVertical(lipgloss.Left, append([]string{title}, lines...)...)
-	return detailPanelStyle(sidebarW).Render(body)
+	return stylePanelAccent.Render(lipgloss.JoinVertical(lipgloss.Left,
+		append([]string{title}, lines...)...))
 }
 
 func lockfileStyle(ok bool) lipgloss.Style {
