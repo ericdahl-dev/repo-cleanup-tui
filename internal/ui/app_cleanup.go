@@ -17,6 +17,8 @@ const (
 	modeBrowse uiMode = iota
 	modePreview
 	modeConfirm
+	modeSearch
+	modeWorkspace
 )
 
 type assessmentMsg struct {

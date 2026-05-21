@@ -154,7 +154,7 @@ func runTUI(pathArgs []string) int {
 	if cfg != nil {
 		ignore = cfg.IgnoreForActive()
 	}
-	if err := ui.Run(root, ignore); err != nil {
+	if err := ui.Run(root, ignore, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "repo-cleanup-tui: %v\n", err)
 		return 1
 	}
