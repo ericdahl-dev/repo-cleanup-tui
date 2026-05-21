@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/cleanup"
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scanner"
 )
 
@@ -97,6 +98,7 @@ func (m model) renderFilterBar() string {
 		keyLegend("/", "find") +
 		keyLegend("f", "filter") +
 		keyLegend("w", "root") +
+		keyLegend("m", "workspaces") +
 		keyLegend("r", "scan") +
 		keyLegend("x", "clean") +
 		keyLegend("[ ]", "page") +
@@ -490,4 +492,53 @@ func (m model) formatTableRow(row scanner.Candidate, repoW int, selected bool) s
 		return joinCells(marker, branchCell, dirtyCell, sizeCell, idleCell, mgrCell, repoCell)
 	}
 	return joinCells(marker, sizeCell, idleCell, mgrCell, repoCell)
+}
+
+func (m model) renderWorkspaceManagerView() string {
+	cfg := m.ensureConfig()
+	title := styleTitle.Render("◆ workspace manager")
+	sub := styleSubtitle.Render("edit workspaces in config.toml · changes save immediately")
+	lines := []string{title, sub, ""}
+
+	for i, ws := range cfg.Workspaces {
+		mark := "   "
+		switch {
+		case ws.Path == cfg.ActiveWorkspace && i == m.wsMgrSel:
+			mark = styleChipOn.Render(" ●›")
+		case ws.Path == cfg.ActiveWorkspace:
+			mark = styleChipOn.Render(" ● ")
+		case i == m.wsMgrSel:
+			mark = styleProgress.Render(" › ")
+		}
+		path := truncatePath(ws.Path, max(40, m.width-8))
+		lines = append(lines, mark+styleDetailValue.Render(path))
+		if i == m.wsMgrSel {
+			ignores := config.FormatIgnoreList(ws.Ignore)
+			lines = append(lines, "     "+styleStatLabel.Render("ignore ")+styleStatValue.Render(truncatePath(ignores, m.width-12)))
+		}
+	}
+
+	var footer string
+	switch m.wsMgrPane {
+	case wsMgrAddPath:
+		footer = stylePanelAccent.Render(
+			styleKey.Render("add path") + " " + styleDetailValue.Render(m.wsMgrInput) +
+				styleKeyHint.Render(" · enter save · esc back"),
+		)
+	case wsMgrEditIgnores:
+		footer = stylePanelAccent.Render(
+			styleKey.Render("ignores") + " " + styleDetailValue.Render(m.wsMgrInput) +
+				styleKeyHint.Render(" · comma-separated · enter save · esc back"),
+		)
+	default:
+		footer = styleKeyHint.Render(
+			"j/u move · enter activate+scan · a add · i edit ignores · delete remove · esc done · w quick path",
+		)
+	}
+
+	body := lipgloss.JoinVertical(lipgloss.Left, append(lines, "", footer)...)
+	if m.showHelp {
+		return lipgloss.JoinVertical(lipgloss.Left, stylePanelAccent.Render(body), RenderHelp(m.width))
+	}
+	return stylePanelAccent.Render(body)
 }

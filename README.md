@@ -73,7 +73,8 @@ On cold start the TUI loads a local scan cache (`.repo-cleanup-tui-scan-cache.js
 | `g` | Git columns (branch, dirty) |
 | `r` | Full rescan (bypasses cache) |
 | `/` | Search path or branch; `c` clear |
-| `w` | Switch workspace (saved to config, rescan) |
+| `w` | Switch workspace path (saved to config, rescan) |
+| `m` | Workspace manager — add, edit ignores, remove entries in config |
 | `x` | Cleanup preview → `p` dry-run, `y` confirm, type token + Enter |
 | `q` / `esc` | Quit or back from sub-modes |
 

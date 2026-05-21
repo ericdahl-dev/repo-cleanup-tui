@@ -68,6 +68,10 @@ _Avoid_: stat phase, du phase
 Primary TUI screen: **Candidate** list, filters, and **Scan** progress.
 _Avoid_: main screen, dashboard (reserved for CI tools like git-green)
 
+**Workspace manager**
+Dedicated TUI screen to add, edit ignores, remove, and activate **Workspace** entries in the **Config file** (`m` from **Browse view**); changes persist immediately.
+_Avoid_: settings screen, config editor
+
 **Help overlay**
 Toggleable keybinding reference (`?`), separate from **Browse view** and **Cleanup preview**.
 _Avoid_: help screen, docs mode
