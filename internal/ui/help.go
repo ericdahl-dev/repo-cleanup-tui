@@ -15,6 +15,7 @@ const helpMarkdown = `# repo-cleanup-tui · keybindings
 |-----|--------|
 | **j** / **↓** | Next row |
 | **u** / **↑** | Previous row |
+| **[** / **]** | Page up / down (20 rows) |
 | **s** | Toggle sort (size / inactive) |
 | **f** | Cycle inactivity filter |
 | **k** | Toggle safe-only (lockfile) |
@@ -81,6 +82,7 @@ func fallbackHelpText() string {
 
   j / down       next row
   u / up         previous row
+  [ / ]          page up / down (20 rows)
   s              sort size/inactive
   f              inactive filter
   k              safe-only
