@@ -8,74 +8,96 @@ TUI scanner for reclaimable Node disk usage in repo folders.
 
 Find `node_modules` in git repos, sort by reclaimable size, filter by inactivity, and only suggest cleanup that package managers can safely restore.
 
+## Install
+
+### Homebrew
+
+```bash
+brew install ericdahl-dev/tap/repo-cleanup-tui
+```
+
+Requires a tagged release (see [Releases](https://github.com/ericdahl-dev/repo-cleanup-tui/releases)). The formula is published to [ericdahl-dev/homebrew-tap](https://github.com/ericdahl-dev/homebrew-tap) by GoReleaser on each `v*` tag.
+
+### Go
+
+```bash
+go install github.com/ericdahl-dev/repo-cleanup-tui@latest
+```
+
+### From source
+
+```bash
+git clone https://github.com/ericdahl-dev/repo-cleanup-tui.git
+cd repo-cleanup-tui
+go build -o repo-cleanup-tui .
+```
+
 ## Run
 
 ```bash
-yarn install
-yarn start -- /Users/edahl/Documents/GitHub
-```
-
-If no path passed, tool scans current working directory.
-
-## CLI install
-
-Use as local package binary:
-
-```bash
-yarn link
-repo-cleanup-tui /Users/edahl/Documents/GitHub
+repo-cleanup-tui                  # TUI for cwd or configured workspace
+repo-cleanup-tui /path/to/repos   # TUI for a specific root
+repo-cleanup-tui init             # write ~/.config/repo-cleanup-tui/config.toml
+repo-cleanup-tui scan --json .    # machine-readable scan
 ```
 
 ## Commands
 
-```bash
-repo-cleanup-tui                  # launch TUI
-repo-cleanup-tui init             # create/update ~/.config/repo-cleanup-tui/config.json
-repo-cleanup-tui scan --json PATH # machine-readable scan output
-repo-cleanup-tui tui PATH         # explicit TUI mode
-```
+| Command | Description |
+|---------|-------------|
+| `repo-cleanup-tui [path]` | Start TUI (default workspace: cwd or config) |
+| `repo-cleanup-tui tui [path]` | Start TUI explicitly |
+| `repo-cleanup-tui init` | Interactive config wizard |
+| `repo-cleanup-tui init --force` | Overwrite existing config |
+| `repo-cleanup-tui scan [--json] [path]` | Scan workspace; `--json` prints candidates |
 
 ## Controls
 
-- `q` / `esc`: quit
+- `q` / `esc`: quit (or back from search/workspace/preview)
+- `?`: toggle help overlay
 - `s`: toggle sort (`size` / `inactive`)
-- `f`: inactivity filter (`all` -> `>=30d` -> `>=90d` -> `>=180d`)
+- `f`: inactivity filter (`all` → `>=30d` → `>=90d` → `>=180d`)
 - `k`: safe-only toggle (lockfile required)
-- `d`: dirty-only toggle (git status)
-- `j` or down arrow: next row
-- `u` or up arrow: previous row
-- `[` / `]`: page jump
-- `r`: force full rescan (bypass cache)
-- `/`: search repo path/branch
-- `c`: clear search
-- `w`: switch workspace root path
+- `d`: dirty-only toggle
 - `g`: toggle git context columns
-- `x`: open cleanup preview for selected row
+- `j` / `u` (or arrows): move selection
+- `r`: full rescan
+- `/`: search repo path or branch; `c` clear search
+- `w`: switch workspace (saved to config, then rescan)
+- `x`: cleanup preview → `p` dry-run, `y` confirm, token + Enter to delete `node_modules`
 
-In cleanup preview:
+## Development
 
-- `p`: run dry-run cleanup audit event
-- `y`: continue to confirm
-- `n`: cancel preview
+```bash
+go test -race ./...
+go build -o repo-cleanup-tui .
+golangci-lint run   # optional; matches CI
+```
 
-In confirm mode:
+## Release
 
-- type exact token `DELETE_NODE_MODULES <repo-folder-name>`, then `enter`
+Tag a version to build cross-platform archives, checksums, GitHub release assets, and update the Homebrew formula:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The [release workflow](.github/workflows/release.yml) runs GoReleaser. Set repository secret `HOMEBREW_TAP_GITHUB_TOKEN` (PAT with push access to `ericdahl-dev/homebrew-tap`) so the tap formula updates automatically.
 
 ## Safety behavior
 
 - Scans only repos that contain `.git`, `package.json`, and `node_modules`.
 - Detects package manager via lockfile.
 - Shows restore command (`yarn install --immutable`, `pnpm install --frozen-lockfile`, `npm ci`, `bun install --frozen-lockfile`).
-- Cleanup is gated behind `x` -> preview -> typed confirmation token.
-- Preview mode supports explicit dry-run before deletion.
-- Guard checks block deletion unless lockfile exists and target is exact `repo/node_modules`.
-- Manager-aware risk checks block unsafe cleanup by default (unknown manager, Yarn zero-install cache, missing lockfile).
-- Audit log prints each dry-run/delete/block event with restore command.
+- Cleanup is gated behind `x` → preview → typed confirmation token.
+- Preview supports dry-run before deletion.
+- Guards block deletion unless lockfile exists and target is exact `repo/node_modules`.
+- Manager-aware risk checks block unsafe cleanup (unknown manager, Yarn zero-install cache, missing lockfile).
+- Audit log prints each dry-run/delete/block event to stderr.
 
 ## Trust posture
 
 - local-first and no telemetry
 - explicit user-triggered actions only
 - safety gates before deletion
-- full scan + cache controls (`r` for bypass)
