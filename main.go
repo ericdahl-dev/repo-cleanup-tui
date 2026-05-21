@@ -12,6 +12,7 @@ import (
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/config"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/scanner"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/ui"
+	"github.com/ericdahl-dev/repo-cleanup-tui/internal/version"
 	"github.com/ericdahl-dev/repo-cleanup-tui/internal/wizard"
 )
 
@@ -25,12 +26,21 @@ Usage:
   repo-cleanup-tui scan [--json] [path]   Scan Workspace; --json for machine output
 
 Options:
-  -h, --help    Show this help
+  -h, --help       Show this help
+  --version        Print version and exit
 
 Environment:
   REPO_CLEANUP_TUI_DEBUG   When set, emit debug logs to stderr
 
 `)
+}
+
+func isVersionFlag(arg string) bool {
+	return arg == "--version" || arg == "-version"
+}
+
+func printVersion() {
+	fmt.Println(version.Line())
 }
 
 func looksLikePath(arg string) bool {
@@ -169,6 +179,11 @@ func main() {
 
 	if len(args) == 0 {
 		os.Exit(runTUI(nil))
+	}
+
+	if len(args) == 1 && isVersionFlag(args[0]) {
+		printVersion()
+		return
 	}
 
 	switch args[0] {
