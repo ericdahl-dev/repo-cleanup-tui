@@ -103,8 +103,19 @@ func (m model) renderFilterBar() string {
 	return lipgloss.JoinVertical(lipgloss.Left, row, keys)
 }
 
+func (m model) tableLayoutWidth() int {
+	if m.width > maxTableWidth {
+		return maxTableWidth
+	}
+	return m.width
+}
+
 func (m model) tableRepoWidth() int {
-	return m.tableRepoWidthFor(m.width)
+	repoW := m.tableRepoWidthFor(m.tableLayoutWidth())
+	if repoW > maxRepoColWidth {
+		return maxRepoColWidth
+	}
+	return repoW
 }
 
 func (m model) tableRepoWidthFor(contentW int) int {
@@ -116,6 +127,14 @@ func (m model) tableRepoWidthFor(contentW int) int {
 		repoW = 16
 	}
 	return repoW
+}
+
+func (m model) tablePanelWidth() int {
+	w := colMarker + colSize + colIdle + colMgr + 4 + m.tableRepoWidth()
+	if m.showGitContext {
+		w += colBranch + colDirty + 2
+	}
+	return w + 4 // border + horizontal padding
 }
 
 func (m model) renderTable(filtered []scanner.Candidate) string {
@@ -145,7 +164,7 @@ func (m model) renderTable(filtered []scanner.Candidate) string {
 	}
 
 	body := strings.Join(append([]string{header}, rows...), "\n")
-	panel := stylePanel.Render(body)
+	panel := stylePanel.Width(m.tablePanelWidth()).Render(body)
 	if len(filtered) > pageSize {
 		end := min(pageStart+pageSize, len(filtered))
 		pager := styleStatLabel.Render(fmt.Sprintf("  showing %d–%d of %d", pageStart+1, end, len(filtered)))

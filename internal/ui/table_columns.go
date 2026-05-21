@@ -13,6 +13,9 @@ const (
 	colMgr    = 8
 	colBranch = 12
 	colDirty  = 5
+
+	maxTableWidth   = 96 // cap table panel on wide terminals
+	maxRepoColWidth = 42
 )
 
 func padRight(s string, width int) string {
